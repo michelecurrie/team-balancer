@@ -6,5 +6,5 @@ import react from '@vitejs/plugin-react'
 // If this is a "yourname.github.io" repo (your user/org page), use base: '/' instead.
 export default defineConfig({
   plugins: [react()],
-  base: '/team-balancer/',
+  base: 'github.com/michelecurrie/team-balancer',
 })
