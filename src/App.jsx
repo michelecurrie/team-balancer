@@ -547,7 +547,43 @@ function buildTeams(players, coaches, numTeams) {
     }
   });
 
-  return { teams, errors, warnings, unplaced };
+  // ---- teammate request fulfillment report ----
+  // Sibling/Avoid are hard constraints, so any failure there is already a hard
+  // error above — this section shows the outcome for every request type
+  // (including those) so people can see at a glance who ended up where relative
+  // to who they asked for, with Transportation/Friend being best-effort only.
+  const playerTeamIndex = {};
+  teams.forEach((t) => {
+    t.units.forEach((u) => {
+      u.members.forEach((m) => {
+        playerTeamIndex[m.idx] = t.index;
+      });
+    });
+  });
+  const fulfilledRequests = [];
+  const unfulfilledRequests = [];
+  players.forEach((p) => {
+    const reason = key(p.teammateReason);
+    const isAvoid = reason === "avoid";
+    if ((reason === "sibling" || reason === "avoid" || reason === "transportation" || reason === "friend") && p.teammateRequest) {
+      const target = byName[key(p.teammateRequest)];
+      if (!target) return; // already flagged in warnings as a name-not-found issue
+      const sameTeam = playerTeamIndex[p.idx] === playerTeamIndex[target.idx];
+      // for Avoid, "fulfilled" means they were kept APART, not together
+      const honored = isAvoid ? !sameTeam : sameTeam;
+      const entry = {
+        name: p.name,
+        request: p.teammateRequest,
+        reason: p.teammateReason,
+        playerTeam: playerTeamIndex[p.idx],
+        targetTeam: playerTeamIndex[target.idx],
+      };
+      if (honored) fulfilledRequests.push(entry);
+      else unfulfilledRequests.push(entry);
+    }
+  });
+
+  return { teams, errors, warnings, unplaced, fulfilledRequests, unfulfilledRequests };
 }
 
 // ---------- shared file download helper ----------
@@ -784,6 +820,17 @@ export default function TeamBalancer() {
         }
         .errorBox { background: #FDEDEF; border: 1px solid #F3C1C9; }
         .warnBox { background: #FFF8E6; border: 1px solid #F2DFA0; }
+        .noteBox { background: #EEF4FB; border: 1px solid #C6DCF0; border-radius: 8px; padding: 16px 18px; margin-bottom: 14px; }
+        .noteBox h3 {
+          font-family: 'Archivo Black', sans-serif;
+          font-size: 14px;
+          margin: 0 0 8px;
+          text-transform: uppercase;
+          letter-spacing: 0.04em;
+          color: var(--rink-navy);
+        }
+        .noteBox-summary { margin: 0 0 8px; font-size: 15px; color: var(--muted); }
+        .noteBox ul { margin: 0; padding-left: 18px; font-size: 15px; line-height: 1.5; }
         .errorBox h3, .warnBox h3 {
           font-family: 'Archivo Black', sans-serif;
           font-size: 14px;
@@ -939,6 +986,33 @@ export default function TeamBalancer() {
                     <li key={i}>{w}</li>
                   ))}
                 </ul>
+              </div>
+            )}
+            {(result.unfulfilledRequests.length > 0 || result.fulfilledRequests.length > 0) && (
+              <div className="noteBox">
+                <h3>Teammate requests</h3>
+                <p className="noteBox-summary">
+                  {result.fulfilledRequests.length} of{" "}
+                  {result.fulfilledRequests.length + result.unfulfilledRequests.length} honored
+                  {result.unfulfilledRequests.length > 0 ? " — the rest are listed below." : "."}
+                </p>
+                {result.unfulfilledRequests.length > 0 && (
+                  <ul>
+                    {result.unfulfilledRequests.map((r, i) => {
+                      const isAvoid = key(r.reason) === "avoid";
+                      const msg = isAvoid
+                        ? `wanted to avoid ${r.request}, but both ended up on Team ${r.playerTeam + 1}`
+                        : `wanted to be with ${r.request} (${r.reason}) — ended up on Team ${
+                            r.playerTeam + 1
+                          } vs. Team ${r.targetTeam + 1}`;
+                      return (
+                        <li key={i}>
+                          <strong>{r.name}</strong> {msg}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
               </div>
             )}
 
