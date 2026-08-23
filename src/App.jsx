@@ -288,7 +288,7 @@ function buildTeams(players, coaches, numTeams) {
         (a === unit && team.units.includes(b)) || (b === unit && team.units.includes(a))
     );
   }
-  function placementCost(team, unit, avgOverall, avgFwd, avgDef) {
+  function placementCost(team, unit, avgOverall, avgFwd, avgDef, idealFwdPerTeam, idealDefPerTeam) {
     const newSkaters = team.forwardCount + team.defenseCount + unit.forwardCount + unit.defenseCount;
     const newRating = team.ratingSum + unit.ratingSum;
     const newFwdCount = team.forwardCount + unit.forwardCount;
@@ -302,6 +302,10 @@ function buildTeams(players, coaches, numTeams) {
       Math.abs(overallAvg - avgOverall) * 2 +
       Math.abs(fwdAvg - avgFwd) +
       Math.abs(defAvg - avgDef);
+    // keep the number of forwards and defense per team close to the target —
+    // weighted heavily so count balance wins out over small rating differences
+    cost += Math.abs(newFwdCount - idealFwdPerTeam) * 4;
+    cost += Math.abs(newDefCount - idealDefPerTeam) * 4;
     const by14 = team.birthYears[2014] + (unit.birthYears[2014] || 0);
     const by15 = team.birthYears[2015] + (unit.birthYears[2015] || 0);
     cost += Math.abs(by14 - by15) * 0.15;
@@ -387,6 +391,13 @@ function buildTeams(players, coaches, numTeams) {
     .filter((u) => u.goalieCount === 0)
     .sort((a, b) => b.members.length - a.members.length || b.ratingSum - a.ratingSum);
 
+  // target forward/defense counts per team, based on the full roster (including
+  // locked units), so movable placement steadily works toward an even split
+  const totalForwardsAll = units.reduce((s, u) => s + u.forwardCount, 0);
+  const totalDefenseAll = units.reduce((s, u) => s + u.defenseCount, 0);
+  const idealFwdPerTeam = totalForwardsAll / teamCount;
+  const idealDefPerTeam = totalDefenseAll / teamCount;
+
   movable.forEach((u) => {
     const totalRatingSum = teams.reduce((s, t) => s + t.ratingSum, 0);
     const totalSkatersNow = teams.reduce((s, t) => s + t.forwardCount + t.defenseCount, 0) || 1;
@@ -412,7 +423,7 @@ function buildTeams(players, coaches, numTeams) {
     let best = candidates[0];
     let bestCost = Infinity;
     candidates.forEach((t) => {
-      const c = placementCost(t, u, avgOverall, avgFwd, avgDef);
+      const c = placementCost(t, u, avgOverall, avgFwd, avgDef, idealFwdPerTeam, idealDefPerTeam);
       if (c < bestCost) {
         bestCost = c;
         best = t;
@@ -427,8 +438,15 @@ function buildTeams(players, coaches, numTeams) {
     const overallAvgs = teams.map((t, i) => (skaterCounts[i] ? t.ratingSum / skaterCounts[i] : 0));
     const fwdAvgs = teams.map((t) => (t.forwardCount ? t.forwardRatingSum / t.forwardCount : 0));
     const defAvgs = teams.map((t) => (t.defenseCount ? t.defenseRatingSum / t.defenseCount : 0));
+    const fwdCounts = teams.map((t) => t.forwardCount);
+    const defCounts = teams.map((t) => t.defenseCount);
     const spread = (arr) => Math.max(...arr) - Math.min(...arr);
-    let score = spread(overallAvgs) * 2 + spread(fwdAvgs) + spread(defAvgs);
+    let score =
+      spread(overallAvgs) * 2 +
+      spread(fwdAvgs) +
+      spread(defAvgs) +
+      spread(fwdCounts) * 4 +
+      spread(defCounts) * 4;
     const yearRatios = teams.map((t) => {
       const tot = t.birthYears[2014] + t.birthYears[2015] || 1;
       return t.birthYears[2014] / tot;
