@@ -168,6 +168,9 @@ function buildTeams(players, coaches, numTeams) {
       forwardCount: members.filter((m) => key(m.position) === "forward").length,
       defenseCount: members.filter((m) => key(m.position) === "defense").length,
       femaleCount: members.filter((m) => key(m.gender) === "female").length,
+      // high/low rated SKATERS only — goalies are balanced separately by their own pass
+      highRatedCount: members.filter((m) => key(m.position) !== "goalie" && m.rating >= 4).length,
+      lowRatedCount: members.filter((m) => key(m.position) !== "goalie" && m.rating < 2).length,
       ratingSum: members.reduce((s, m) => s + (m.rating || 0), 0),
       forwardRatingSum: members
         .filter((m) => key(m.position) === "forward")
@@ -256,6 +259,8 @@ function buildTeams(players, coaches, numTeams) {
     forwardCount: 0,
     defenseCount: 0,
     femaleCount: 0,
+    highRatedCount: 0,
+    lowRatedCount: 0,
     ratingSum: 0,
     forwardRatingSum: 0,
     defenseRatingSum: 0,
@@ -288,7 +293,17 @@ function buildTeams(players, coaches, numTeams) {
         (a === unit && team.units.includes(b)) || (b === unit && team.units.includes(a))
     );
   }
-  function placementCost(team, unit, avgOverall, avgFwd, avgDef, idealFwdPerTeam, idealDefPerTeam) {
+  function placementCost(
+    team,
+    unit,
+    avgOverall,
+    avgFwd,
+    avgDef,
+    idealFwdPerTeam,
+    idealDefPerTeam,
+    idealHighPerTeam,
+    idealLowPerTeam
+  ) {
     const newSkaters = team.forwardCount + team.defenseCount + unit.forwardCount + unit.defenseCount;
     const newRating = team.ratingSum + unit.ratingSum;
     const newFwdCount = team.forwardCount + unit.forwardCount;
@@ -306,6 +321,12 @@ function buildTeams(players, coaches, numTeams) {
     // weighted heavily so count balance wins out over small rating differences
     cost += Math.abs(newFwdCount - idealFwdPerTeam) * 4;
     cost += Math.abs(newDefCount - idealDefPerTeam) * 4;
+    // spread out top-rated (4+) and bottom-rated (<2) skaters instead of letting
+    // them cluster on the same team
+    const newHigh = team.highRatedCount + unit.highRatedCount;
+    const newLow = team.lowRatedCount + unit.lowRatedCount;
+    cost += Math.abs(newHigh - idealHighPerTeam) * 3;
+    cost += Math.abs(newLow - idealLowPerTeam) * 3;
     const by14 = team.birthYears[2014] + (unit.birthYears[2014] || 0);
     const by15 = team.birthYears[2015] + (unit.birthYears[2015] || 0);
     cost += Math.abs(by14 - by15) * 0.15;
@@ -320,6 +341,8 @@ function buildTeams(players, coaches, numTeams) {
     team.forwardCount += unit.forwardCount;
     team.defenseCount += unit.defenseCount;
     team.femaleCount += unit.femaleCount;
+    team.highRatedCount += unit.highRatedCount;
+    team.lowRatedCount += unit.lowRatedCount;
     team.ratingSum += unit.ratingSum;
     team.forwardRatingSum += unit.forwardRatingSum;
     team.defenseRatingSum += unit.defenseRatingSum;
@@ -397,6 +420,12 @@ function buildTeams(players, coaches, numTeams) {
   const totalDefenseAll = units.reduce((s, u) => s + u.defenseCount, 0);
   const idealFwdPerTeam = totalForwardsAll / teamCount;
   const idealDefPerTeam = totalDefenseAll / teamCount;
+  // same idea for top-rated (4+) and bottom-rated (<2) skaters, so they get
+  // spread across teams instead of clustering
+  const totalHighAll = units.reduce((s, u) => s + u.highRatedCount, 0);
+  const totalLowAll = units.reduce((s, u) => s + u.lowRatedCount, 0);
+  const idealHighPerTeam = totalHighAll / teamCount;
+  const idealLowPerTeam = totalLowAll / teamCount;
 
   movable.forEach((u) => {
     const totalRatingSum = teams.reduce((s, t) => s + t.ratingSum, 0);
@@ -423,7 +452,17 @@ function buildTeams(players, coaches, numTeams) {
     let best = candidates[0];
     let bestCost = Infinity;
     candidates.forEach((t) => {
-      const c = placementCost(t, u, avgOverall, avgFwd, avgDef, idealFwdPerTeam, idealDefPerTeam);
+      const c = placementCost(
+        t,
+        u,
+        avgOverall,
+        avgFwd,
+        avgDef,
+        idealFwdPerTeam,
+        idealDefPerTeam,
+        idealHighPerTeam,
+        idealLowPerTeam
+      );
       if (c < bestCost) {
         bestCost = c;
         best = t;
@@ -440,13 +479,17 @@ function buildTeams(players, coaches, numTeams) {
     const defAvgs = teams.map((t) => (t.defenseCount ? t.defenseRatingSum / t.defenseCount : 0));
     const fwdCounts = teams.map((t) => t.forwardCount);
     const defCounts = teams.map((t) => t.defenseCount);
+    const highCounts = teams.map((t) => t.highRatedCount);
+    const lowCounts = teams.map((t) => t.lowRatedCount);
     const spread = (arr) => Math.max(...arr) - Math.min(...arr);
     let score =
       spread(overallAvgs) * 2 +
       spread(fwdAvgs) +
       spread(defAvgs) +
       spread(fwdCounts) * 4 +
-      spread(defCounts) * 4;
+      spread(defCounts) * 4 +
+      spread(highCounts) * 3 +
+      spread(lowCounts) * 3;
     const yearRatios = teams.map((t) => {
       const tot = t.birthYears[2014] + t.birthYears[2015] || 1;
       return t.birthYears[2014] / tot;
@@ -503,6 +546,8 @@ function buildTeams(players, coaches, numTeams) {
           team.forwardCount -= u.forwardCount;
           team.defenseCount -= u.defenseCount;
           team.femaleCount -= u.femaleCount;
+          team.highRatedCount -= u.highRatedCount;
+          team.lowRatedCount -= u.lowRatedCount;
           team.ratingSum -= u.ratingSum;
           team.forwardRatingSum -= u.forwardRatingSum;
           team.defenseRatingSum -= u.defenseRatingSum;
@@ -1052,6 +1097,9 @@ export default function TeamBalancer() {
                       <div style={{ fontSize: 13, marginTop: 6, color: "var(--muted)" }}>
                         {t.femaleCount} female · '14: {t.birthYears[2014] || 0} · '15:{" "}
                         {t.birthYears[2015] || 0}
+                      </div>
+                      <div style={{ fontSize: 13, marginTop: 2, color: "var(--muted)" }}>
+                        4+ rated: {t.highRatedCount} · Under 2 rated: {t.lowRatedCount}
                       </div>
                       <div className="rosterList">
                         {t.units
