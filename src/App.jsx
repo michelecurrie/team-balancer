@@ -926,6 +926,24 @@ export default function TeamBalancer() {
         .rosterRow .pos { color: var(--muted); font-family: 'Roboto Mono', monospace; font-size: 11px; }
         .footerActions { display: flex; gap: 12px; margin-top: 24px; }
         .emptyState { text-align: center; padding: 40px 20px; color: var(--muted); }
+        .howPanel summary {
+          cursor: pointer;
+          font-weight: 600;
+          font-size: 16px;
+          color: var(--rink-navy);
+          padding: 6px 0;
+        }
+        .howPanel summary:hover { color: var(--line-red); }
+        .howBody { margin-top: 12px; font-size: 15px; line-height: 1.55; color: var(--ink); }
+        .howBody p { margin: 0 0 12px; }
+        .priorityList {
+          margin: 0 0 14px;
+          padding-left: 22px;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+        .priorityList li { padding-left: 4px; }
       `}</style>
 
       <div className="hero">
@@ -939,6 +957,59 @@ export default function TeamBalancer() {
       </div>
 
       <div className="section">
+        <div className="panel howPanel">
+          <h2>What this is</h2>
+          <p className="sub" style={{ marginBottom: 16 }}>
+            This tool splits a full season's registration list into balanced teams for your
+            coaches. Upload a players spreadsheet and a coaches spreadsheet, tell it how many
+            teams you're forming, and it assigns every player to a team — honoring the requests
+            that matter most, then balancing everything else as evenly as it can around them.
+          </p>
+          <details>
+            <summary>How team assignments are prioritized</summary>
+            <div className="howBody">
+              <p>
+                Requests are honored in this order. The first three are treated as{" "}
+                <strong>hard requirements</strong> — the app will not break them to improve
+                balance, and will show an error if they can't all be satisfied at once (e.g. two
+                head coaches both need the same assistant). The last two are{" "}
+                <strong>best effort</strong> — honored whenever possible, but sacrificed first if
+                honoring them would force a team badly out of balance.
+              </p>
+              <ol className="priorityList">
+                <li>
+                  <strong>Coach / assistant coach pairings</strong> — exactly as listed in the
+                  coaches CSV. Each assistant is assumed to belong to one team only.
+                </li>
+                <li>
+                  <strong>Sibling requests</strong> (Teammate Reason = Sibling) — always kept
+                  together. A coach's own listed children are treated the same way, automatically
+                  locked to that coach's team.
+                </li>
+                <li>
+                  <strong>Avoid requests</strong> (Teammate Reason = Avoid) — always kept apart.
+                </li>
+                <li>
+                  <strong>Transportation requests</strong> (Teammate Reason = Transportation) —
+                  kept together when it doesn't cost too much balance.
+                </li>
+                <li>
+                  <strong>Friend requests</strong> (Teammate Reason = Friend) — same as
+                  Transportation, lowest priority.
+                </li>
+              </ol>
+              <p>
+                After requests are placed, the app balances everything else it can: the number of
+                forwards and defense per team, overall skater rating per team, birth-year split,
+                how many top-rated (4+) and lower-rated (under 2) skaters land on each team, 1–2
+                goalies per team, and making sure no team ends up with exactly one female player
+                (every team has either zero or at least two). The results screen shows exactly
+                which requests couldn't be honored and why, so nothing is a silent trade-off.
+              </p>
+            </div>
+          </details>
+        </div>
+
         <div className="panel">
           <h2>1. Upload rosters</h2>
           <p className="sub">
