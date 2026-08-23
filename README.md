@@ -2,7 +2,7 @@
 
 ## Deploy to GitHub Pages (free)
 
-1. **Create a new repo on GitHub** — e.g. `team-balancer` (public repos get free Pages hosting).
+1. **Create a new repo on GitHub** — e.g. `team-balancer` (public repos get free Pages hosting). Test
 
 2. **Edit `vite.config.js`** — change the `base` value to match your repo name exactly:
    ```js

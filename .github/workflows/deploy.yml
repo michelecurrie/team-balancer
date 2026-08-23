@@ -1,4 +1,4 @@
-name: Deploy Vite app to GitHub Pages
+name: Deploy Vite app to GitHub Page
 
 on:
   push:
