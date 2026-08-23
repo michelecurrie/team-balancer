@@ -15,7 +15,7 @@
    cd team-balancer-app
    git init
    git add .
-   git commit -m "Initial commit"
+   git commit -m "Initial commitss"
    git branch -M main
    git remote add origin https://github.com/YOUR_USERNAME/team-balancer.git
    git push -u origin main
