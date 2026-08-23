@@ -6,4 +6,4 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <TeamBalancer />
   </React.StrictMode>,
-) 
+)

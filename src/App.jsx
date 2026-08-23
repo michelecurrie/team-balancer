@@ -16,7 +16,7 @@ function parseCSV(text) {
     Object.keys(row).forEach((k) => (out[norm(k)] = norm(row[k])));
     return out;
   });
-} 
+}
 
 function loadPlayers(text) {
   return parseCSV(text).map((r, i) => ({
@@ -532,6 +532,17 @@ function buildTeams(players, coaches, numTeams) {
   return { teams, errors, warnings, unplaced };
 }
 
+// ---------- shared file download helper ----------
+function downloadTextFile(filename, text, mime) {
+  const blob = new Blob([text], { type: mime || "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 // ---------- CSV export ----------
 function exportCSV(teams) {
   const rows = [["Team", "Coach", "Assistants", "Name", "Position", "Year of Birth", "Rating", "Gender"]];
@@ -552,13 +563,7 @@ function exportCSV(teams) {
     });
   });
   const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
-  const blob = new Blob([csv], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "team_rosters.csv";
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadTextFile("team_rosters.csv", csv);
 }
 
 // ---------- UI ----------
@@ -831,7 +836,23 @@ export default function TeamBalancer() {
             Defense), Teammate Request, Teammate Reason. Coaches CSV needs: Coach, Coach Assistant
             1–3, Childs Names — list your head coach and their already-decided assistant coach(es)
             on the same row. Childs Names can be left blank for coaches with no kids on the team.
+            Not sure of the format? Download the templates below — they're pre-filled with example
+            data you can overwrite with your own roster.
           </p>
+          <div className="controlsRow" style={{ marginTop: 0, marginBottom: 20 }}>
+            <button
+              className="btn btn-outline"
+              onClick={() => downloadTextFile("players_template.csv", SAMPLE_PLAYERS)}
+            >
+              Download players CSV template
+            </button>
+            <button
+              className="btn btn-outline"
+              onClick={() => downloadTextFile("coaches_template.csv", SAMPLE_COACHES)}
+            >
+              Download coaches CSV template
+            </button>
+          </div>
           <div className="fileRow">
             <FileDrop
               label="Players CSV"
