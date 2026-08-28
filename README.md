@@ -86,7 +86,7 @@ automatically.
 | Column | Required | Notes |
 |---|---|---|
 | `Name` | Yes | Must be unique — teammate requests and coaches' children are matched by exact name. |
-| `Year of Birth` | Yes | e.g. `2014`, `2015`. Used to balance birth-year split across teams. |
+| `Year of Birth` | Yes | e.g. `2014`, `2015`. Works with any birth years present in your data — used to balance the birth-year split across teams. |
 | `Rating` | Yes | Integer `1`-`5`. Drives strength balancing and the 4+/under-2 spread. |
 | `Gender` | Yes | `Male` or `Female`. Used for the female-pairing rule. |
 | `Position` | Yes | `Goalie`, `Forward`, or `Defense`. |
@@ -148,7 +148,9 @@ weight:
    spread out instead of clustering on one team.
 3. **Overall / forward / defense average rating per team** - kept close to
    the roster-wide average.
-4. **Birth-year (2014 / 2015) split per team.**
+4. **Birth-year split per team** - works with whatever birth years are
+   actually in your data (a 2014/2015 division, a 2016/2017 division, or
+   any other set), not a fixed pair.
 5. **Goalies** - every team gets 1-2, assigned before skaters so no team
    is left with zero.
 6. **Female pairing rule** - no team ends up with exactly one female

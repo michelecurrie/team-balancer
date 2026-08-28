@@ -264,7 +264,7 @@ function buildTeams(players, coaches, numTeams) {
     ratingSum: 0,
     forwardRatingSum: 0,
     defenseRatingSum: 0,
-    birthYears: { 2014: 0, 2015: 0 },
+    birthYears: {},
     units: [],
   }));
   Object.entries(assistantAssignment).forEach(([akey, ci]) => {
@@ -302,7 +302,8 @@ function buildTeams(players, coaches, numTeams) {
     idealFwdPerTeam,
     idealDefPerTeam,
     idealHighPerTeam,
-    idealLowPerTeam
+    idealLowPerTeam,
+    idealByYear
   ) {
     const newSkaters = team.forwardCount + team.defenseCount + unit.forwardCount + unit.defenseCount;
     const newRating = team.ratingSum + unit.ratingSum;
@@ -327,9 +328,12 @@ function buildTeams(players, coaches, numTeams) {
     const newLow = team.lowRatedCount + unit.lowRatedCount;
     cost += Math.abs(newHigh - idealHighPerTeam) * 3;
     cost += Math.abs(newLow - idealLowPerTeam) * 3;
-    const by14 = team.birthYears[2014] + (unit.birthYears[2014] || 0);
-    const by15 = team.birthYears[2015] + (unit.birthYears[2015] || 0);
-    cost += Math.abs(by14 - by15) * 0.15;
+    // keep each birth year's count per team close to its target — works for
+    // any set of birth years present in the data, not just a fixed pair
+    Object.keys(idealByYear).forEach((y) => {
+      const newYearCount = (team.birthYears[y] || 0) + (unit.birthYears[y] || 0);
+      cost += Math.abs(newYearCount - idealByYear[y]) * 1.5;
+    });
     const newFemale = team.femaleCount + unit.femaleCount;
     if (newFemale === 1) cost += 8; // heavy penalty for stranding a single female
     return cost;
@@ -426,6 +430,15 @@ function buildTeams(players, coaches, numTeams) {
   const totalLowAll = units.reduce((s, u) => s + u.lowRatedCount, 0);
   const idealHighPerTeam = totalHighAll / teamCount;
   const idealLowPerTeam = totalLowAll / teamCount;
+  // same idea for birth year — works for any years present in the data (not
+  // just a fixed pair), so this works the same for a 2014/2015 division as
+  // it would for a 2016/2017 division, or any other set of birth years
+  const allBirthYears = [...new Set(units.flatMap((u) => Object.keys(u.birthYears)))];
+  const idealByYear = {};
+  allBirthYears.forEach((y) => {
+    const totalForYear = units.reduce((s, u) => s + (u.birthYears[y] || 0), 0);
+    idealByYear[y] = totalForYear / teamCount;
+  });
 
   movable.forEach((u) => {
     const totalRatingSum = teams.reduce((s, t) => s + t.ratingSum, 0);
@@ -461,7 +474,8 @@ function buildTeams(players, coaches, numTeams) {
         idealFwdPerTeam,
         idealDefPerTeam,
         idealHighPerTeam,
-        idealLowPerTeam
+        idealLowPerTeam,
+        idealByYear
       );
       if (c < bestCost) {
         bestCost = c;
@@ -490,11 +504,11 @@ function buildTeams(players, coaches, numTeams) {
       spread(defCounts) * 4 +
       spread(highCounts) * 3 +
       spread(lowCounts) * 3;
-    const yearRatios = teams.map((t) => {
-      const tot = t.birthYears[2014] + t.birthYears[2015] || 1;
-      return t.birthYears[2014] / tot;
+    // works for any set of birth years present in the data, not just a fixed pair
+    allBirthYears.forEach((y) => {
+      const counts = teams.map((t) => t.birthYears[y] || 0);
+      score += spread(counts) * 1.5;
     });
-    score += spread(yearRatios) * 3;
     teams.forEach((t) => {
       if (t.femaleCount === 1) score += 8;
       if (t.goalieCount === 0) score += 20;
@@ -1166,8 +1180,11 @@ export default function TeamBalancer() {
                         <span>Def {defAvg}</span>
                       </div>
                       <div style={{ fontSize: 13, marginTop: 6, color: "var(--muted)" }}>
-                        {t.femaleCount} female · '14: {t.birthYears[2014] || 0} · '15:{" "}
-                        {t.birthYears[2015] || 0}
+                        {t.femaleCount} female ·{" "}
+                        {Object.keys(t.birthYears)
+                          .sort()
+                          .map((y) => `'${y.slice(-2)}: ${t.birthYears[y]}`)
+                          .join(" · ")}
                       </div>
                       <div style={{ fontSize: 13, marginTop: 2, color: "var(--muted)" }}>
                         4+ rated: {t.highRatedCount} · Under 2 rated: {t.lowRatedCount}
