@@ -104,9 +104,24 @@ automatically.
 The number of rows in this file must equal the number of teams you set in
 the app.
 
-Use the **"Download players CSV template"** / **"Download coaches CSV
-template"** buttons in the app to get correctly-formatted starting files
-pre-filled with example data.
+### Sample data
+
+The app ships with four ready-to-use mock rosters, one per division, sized
+to a division's typical registration numbers. Pick one from the "Sample
+data" dropdown in the app to either load it straight in or download the
+CSVs as a formatting reference:
+
+| Division | Total players | Goalies | Skaters | Teams | Birth years |
+|---|---|---|---|---|---|
+| U11 | 241 | 18 | 223 | 14 | 2015 / 2016 |
+| U13 | 189 | 14 | 175 | 11 | 2013 / 2014 |
+| U15 | 161 | 12 | 149 | 9 | 2011 / 2012 |
+| U18 | 153 | 11 | 142 | 9 | 2008 / 2009 |
+
+Birth years in the sample data are illustrative — swap in whatever years
+your division actually uses; the app balances on whatever it finds in the
+`Year of Birth` column, not a fixed pair (see
+[How team formation works](#how-team-formation-works)).
 
 ---
 

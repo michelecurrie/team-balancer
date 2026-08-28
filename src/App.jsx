@@ -1,9 +1,6 @@
 import React, { useState, useMemo, useRef } from "react";
 import Papa from "papaparse";
-
-export const SAMPLE_PLAYERS = 'Name,Year of Birth,Rating,Gender,Position,Teammate Request,Teammate Reason\nGianna Guerette,2014,5,Female,Goalie,,\nJulian Doucet,2014,5,Male,Forward,,\nLincoln Godin,2015,5,Male,Forward,,\nElizabeth Ross,2015,2,Female,Goalie,,\nSebastian Doucet,2015,5,Male,Defense,Julian Doucet,Transportation\nGrayson Boudreau,2015,2,Male,Forward,,\nChloe Comeau,2014,4,Female,Forward,Ethan Robichaud,Sibling\nGabriel Guerette,2014,3,Male,Defense,,\nGianna Doiron,2015,5,Female,Forward,,\nEthan Robichaud,2014,4,Male,Forward,Chloe Comeau,Sibling\nMia Savoie,2015,3,Female,Forward,Henry Young,Avoid\nOliver Brown,2014,3,Male,Goalie,,\nLuke Guerette,2014,1,Male,Defense,Maverick Comeau,Transportation\nDavid Caissie,2015,2,Male,Forward,,\nJacob Campbell,2014,3,Male,Goalie,,\nMatthew Sinclair,2014,1,Male,Forward,,\nTheodore Basque,2015,5,Male,Forward,Daniel Boucher,Avoid\nBenjamin Boucher,2015,3,Male,Forward,,\nCharlotte Bourque,2014,4,Female,Defense,,\nJohn Sinclair,2014,2,Male,Forward,,\nEthan Thibodeau,2014,1,Male,Forward,,\nScarlett Doiron,2014,4,Female,Defense,Dylan Ouellet,Transportation\nThomas Fraser,2015,1,Male,Defense,,\nCharles Clark,2014,1,Male,Forward,Logan Landry,Transportation\nJosiah Clark,2014,2,Male,Forward,,\nDylan Ross,2015,3,Male,Defense,,\nOliver Levesque,2014,4,Male,Forward,,\nLuke Taylor,2014,1,Male,Forward,Camila Roy,Friend\nMaverick Doucet,2015,4,Male,Goalie,,\nDavid Roy,2015,5,Male,Forward,Benjamin Grant,Friend\nIsabella Guerette,2015,5,Female,Forward,,\nLogan Landry,2014,5,Male,Defense,,\nPenelope Mitchell,2014,1,Female,Defense,,\nJacob Brown,2014,4,Male,Forward,,\nDaniel Taylor,2015,5,Male,Defense,,\nWilliam Arsenault,2014,5,Male,Forward,,\nCharles Richard,2014,5,Male,Defense,Sebastian Campbell,Transportation\nLucas Murray,2014,5,Male,Forward,,\nJackson Belliveau,2014,5,Male,Forward,,\nHenry Young,2015,4,Male,Defense,Mia Savoie,Avoid\nMichael Ross,2015,1,Male,Defense,,\nElijah Martin,2015,5,Male,Forward,Oliver Levesque,Transportation\nJacob Gallant,2014,2,Male,Forward,Elizabeth Walker,Friend\nLevi Walker,2014,3,Male,Defense,Owen Savoie,Avoid\nEzra Basque,2014,1,Male,Defense,Isabella Guerette,Friend\nDaniel Boucher,2015,2,Male,Defense,Theodore Basque,Avoid\nAnthony Belliveau,2014,4,Male,Goalie,,\nChloe Young,2015,1,Female,Defense,,\nMason Caissie,2014,4,Male,Forward,Liam Hebert,Avoid\nElla Vautour,2015,2,Female,Forward,,\nCamila Roy,2014,3,Female,Defense,,\nElizabeth Reid,2014,1,Female,Defense,Ella Vautour,Transportation\nElijah Doucet,2015,1,Male,Defense,William Arsenault,Friend\nLevi Young,2014,1,Male,Forward,Gianna Doiron,Transportation\nJames Caissie,2014,5,Male,Forward,,\nJayden Richard,2015,5,Male,Forward,,\nAlexander Brown,2014,2,Male,Forward,,\nCarter Richard,2015,3,Male,Defense,Matthew Chiasson,Sibling\nChristopher Chiasson,2015,5,Male,Defense,,\nEleanor MacDonald,2014,4,Female,Forward,David Caissie,Friend\nWyatt Doucet,2015,4,Male,Defense,Daniel Daigle,Sibling\nEzra Guerette,2014,5,Male,Forward,,\nAsher Wilson,2014,2,Male,Forward,,\nPenelope Caissie,2014,1,Female,Defense,Wyatt LeBlanc,Sibling\nLiam Hebert,2014,3,Male,Forward,Mason Caissie,Avoid\nJack Boucher,2014,3,Male,Defense,,\nCarter Belliveau,2015,5,Male,Forward,,\nMason Arsenault,2015,1,Male,Forward,,\nMatthew Chiasson,2014,1,Male,Defense,Carter Richard,Sibling\nScarlett Taylor,2015,1,Female,Defense,,\nIsaac Tremblay,2014,4,Male,Defense,,\nMateo Boucher,2014,2,Male,Defense,Penelope Clark,Sibling\nHenry Landry,2015,4,Male,Forward,,\nLiam Richard,2015,2,Male,Defense,,\nDylan Guerette,2014,3,Male,Forward,,\nOliver MacDonald,2014,2,Male,Defense,,\nJackson Haché,2014,3,Male,Defense,,\nJackson Wilson,2014,3,Male,Forward,Jack Boucher,Friend\nHarper Brown,2014,3,Female,Forward,Alexander Savoie,Sibling\nSamuel Robichaud,2015,3,Male,Forward,Lucas Murray,Friend\nEzra Richard,2014,2,Male,Defense,,\nMaverick Comeau,2014,4,Male,Forward,,\nMichael Guerette,2015,4,Male,Defense,,\nDavid Ross,2015,4,Male,Forward,,\nAsher Robichaud,2014,1,Male,Defense,,\nDylan Ouellet,2015,5,Male,Forward,,\nSofia Godin,2015,1,Female,Defense,Chloe Gagnon,Friend\nElizabeth Poirier,2015,2,Female,Forward,,\nHenry Tremblay,2015,3,Male,Forward,,\nLogan Melanson,2014,2,Male,Goalie,,\nAlexander Savoie,2015,5,Male,Forward,Harper Brown,Sibling\nElizabeth Walker,2014,5,Female,Forward,,\nOwen Savoie,2014,3,Male,Defense,Levi Walker,Avoid\nChristopher Murray,2015,2,Male,Forward,,\nPenelope Clark,2015,1,Female,Forward,Mateo Boucher,Sibling\nSebastian Campbell,2015,1,Male,Forward,,\nOliver Poirier,2014,2,Male,Defense,Chloe Young,Friend\nBenjamin Grant,2015,3,Male,Forward,,\nDaniel Daigle,2015,2,Male,Defense,Wyatt Doucet,Sibling\nCharles Basque,2015,3,Male,Goalie,,\nLiam Fraser,2014,3,Male,Defense,Grayson Boudreau,Friend\nChloe Gagnon,2014,2,Female,Defense,,\nWyatt LeBlanc,2015,2,Male,Forward,Penelope Caissie,Sibling\nJames Taylor,2015,3,Male,Defense,,\nJoseph Caissie,2015,5,Male,Defense,,\nLuke Sinclair,2014,4,Male,Forward,Asher Wilson,Friend\n';
-export const SAMPLE_COACHES = 'Coach,Coach Assistant 1,Coach Assistant 2,Coach Assistant 3,Childs Names\nLevi Godin,Alexander Cormier,Leo Haché,,Luke Sinclair\nGabriel Haché,Charlotte Comeau,,,Isaac Tremblay\nJulian Grant,Amelia Roy,,,Dylan Ross\nSebastian Ouellet,,,,Alexander Savoie\nAva Thibodeau,Amelia Smith,Elizabeth Hebert,,\nMia Levesque,Josiah Fraser,,,Henry Tremblay\n';
-
+import { SAMPLE_DIVISIONS } from "./sample_divisions.js";
 
 // ---------- helpers ----------
 const norm = (s) => (s || "").toString().trim();
@@ -733,13 +730,17 @@ export default function TeamBalancer() {
   const [numTeams, setNumTeams] = useState(6);
   const [result, setResult] = useState(null);
   const [ran, setRan] = useState(false);
+  const [selectedDivision, setSelectedDivision] = useState(SAMPLE_DIVISIONS[0].slug);
 
-  const loadSample = () => {
-    setPlayersText(SAMPLE_PLAYERS);
-    setPlayersFilename("players_mock.csv (sample)");
-    setCoachesText(SAMPLE_COACHES);
-    setCoachesFilename("coaches_mock.csv (sample)");
-    setNumTeams(6);
+  const currentDivision = SAMPLE_DIVISIONS.find((d) => d.slug === selectedDivision);
+
+  const loadSampleDivision = () => {
+    const d = currentDivision;
+    setPlayersText(d.players);
+    setPlayersFilename(`players_${d.slug}_mock.csv (sample)`);
+    setCoachesText(d.coaches);
+    setCoachesFilename(`coaches_${d.slug}_mock.csv (sample)`);
+    setNumTeams(d.teamCount);
     setResult(null);
     setRan(false);
   };
@@ -839,6 +840,33 @@ export default function TeamBalancer() {
         }
         .panel .sub { color: var(--muted); font-size: 15px; margin: 0 0 18px; }
         .fileRow { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px,1fr)); gap: 16px; }
+        .sampleBox {
+          background: #F7FAFD;
+          border: 1px solid var(--border);
+          border-radius: 8px;
+          padding: 16px 18px;
+          margin-bottom: 20px;
+        }
+        .sampleBox-label {
+          font-family: 'Archivo Black', sans-serif;
+          font-size: 13px;
+          text-transform: uppercase;
+          letter-spacing: 0.04em;
+          color: var(--rink-navy);
+          margin-bottom: 6px;
+        }
+        .sampleBox-hint { font-size: 14px; color: var(--muted); margin: 0 0 12px; }
+        .sampleBox-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .sampleSelect {
+          font-family: 'Barlow Condensed', sans-serif;
+          font-size: 15px;
+          padding: 9px 10px;
+          border: 1px solid var(--border);
+          border-radius: 6px;
+          background: white;
+          min-width: 230px;
+        }
+        .sampleBox-detail { font-size: 13px; color: var(--muted); margin: 10px 0 0; font-family: 'Roboto Mono', monospace; }
         .fileDrop {
           border: 1px dashed var(--border);
           border-radius: 8px;
@@ -1031,23 +1059,54 @@ export default function TeamBalancer() {
             Defense), Teammate Request, Teammate Reason. Coaches CSV needs: Coach, Coach Assistant
             1–3, Childs Names — list your head coach and their already-decided assistant coach(es)
             on the same row. Childs Names can be left blank for coaches with no kids on the team.
-            Not sure of the format? Download the templates below — they're pre-filled with example
-            data you can overwrite with your own roster.
           </p>
-          <div className="controlsRow" style={{ marginTop: 0, marginBottom: 20 }}>
-            <button
-              className="btn btn-outline"
-              onClick={() => downloadTextFile("players_template.csv", SAMPLE_PLAYERS)}
-            >
-              Download players CSV template
-            </button>
-            <button
-              className="btn btn-outline"
-              onClick={() => downloadTextFile("coaches_template.csv", SAMPLE_COACHES)}
-            >
-              Download coaches CSV template
-            </button>
+
+          <div className="sampleBox">
+            <div className="sampleBox-label">Sample data</div>
+            <p className="sampleBox-hint">
+              Not sure of the format, or just want to try the app first? Each division below is a
+              complete, ready-to-use mock roster sized for that division's typical registration —
+              pick one to load it straight into the app or download the CSVs.
+            </p>
+            <div className="sampleBox-row">
+              <select
+                className="sampleSelect"
+                value={selectedDivision}
+                onChange={(e) => setSelectedDivision(e.target.value)}
+              >
+                {SAMPLE_DIVISIONS.map((d) => (
+                  <option key={d.slug} value={d.slug}>
+                    {d.label} — {d.totalPlayers} players / {d.teamCount} teams
+                  </option>
+                ))}
+              </select>
+              <button className="btn btn-primary" onClick={loadSampleDivision}>
+                Load into app
+              </button>
+              <button
+                className="btn btn-outline"
+                onClick={() =>
+                  downloadTextFile(`players_${currentDivision.slug}_mock.csv`, currentDivision.players)
+                }
+              >
+                Download players CSV
+              </button>
+              <button
+                className="btn btn-outline"
+                onClick={() =>
+                  downloadTextFile(`coaches_${currentDivision.slug}_mock.csv`, currentDivision.coaches)
+                }
+              >
+                Download coaches CSV
+              </button>
+            </div>
+            <p className="sampleBox-detail">
+              {currentDivision.label}: {currentDivision.totalPlayers} total players (
+              {currentDivision.goalies} goalies, {currentDivision.skaters} skaters) across{" "}
+              {currentDivision.teamCount} teams · birth years {currentDivision.birthYears.join(" / ")}
+            </p>
           </div>
+
           <div className="fileRow">
             <FileDrop
               label="Players CSV"
@@ -1080,9 +1139,6 @@ export default function TeamBalancer() {
             </div>
             <button className="btn btn-primary" disabled={!canRun} onClick={runBuild}>
               Generate teams
-            </button>
-            <button className="btn btn-outline" onClick={loadSample}>
-              Load sample data
             </button>
           </div>
         </div>
