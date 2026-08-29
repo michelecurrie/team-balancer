@@ -1,6 +1,5 @@
 import React, { useState, useMemo, useRef } from "react";
 import Papa from "papaparse";
-import { SAMPLE_DIVISIONS } from "./sample_divisions.js";
 
 // ---------- helpers ----------
 const norm = (s) => (s || "").toString().trim();
@@ -61,6 +60,220 @@ class UF {
       rb = this.find(b);
     if (ra !== rb) this.p[ra] = rb;
   }
+}
+
+// ---------- mock data generator ----------
+const MOCK_FIRST_M = [
+  "Liam","Noah","Oliver","Elijah","James","William","Benjamin","Lucas","Henry","Alexander",
+  "Mason","Michael","Ethan","Daniel","Jacob","Logan","Jackson","Levi","Sebastian","Mateo",
+  "Jack","Owen","Theodore","Aiden","Samuel","Joseph","John","David","Wyatt","Matthew",
+  "Luke","Asher","Carter","Julian","Grayson","Leo","Jayden","Gabriel","Isaac","Lincoln",
+  "Anthony","Hudson","Dylan","Ezra","Thomas","Charles","Christopher","Jaxon","Maverick","Josiah",
+  "Ryan","Nathan","Adrian","Christian","Cameron","Colton","Brayden","Cooper","Eli","Landon",
+];
+const MOCK_FIRST_F = [
+  "Olivia","Emma","Charlotte","Amelia","Sophia","Isabella","Ava","Mia","Evelyn","Luna",
+  "Harper","Camila","Sofia","Scarlett","Elizabeth","Eleanor","Emily","Chloe","Mila","Violet",
+  "Penelope","Gianna","Aria","Abigail","Ella","Avery","Layla","Nora","Hazel","Zoey",
+  "Riley","Lily","Ellie","Stella","Aurora","Natalie","Grace","Maya","Addison","Skylar",
+];
+const MOCK_LAST = [
+  "Smith","Brown","Tremblay","Martin","Roy","Gagnon","Ouellet","Belliveau","LeBlanc","Cormier",
+  "Doucet","Arsenault","Landry","Boudreau","Melanson","Comeau","Robichaud","Savoie","Thibodeau","Richard",
+  "Chiasson","Hebert","Poirier","Levesque","Gallant","Wilson","Taylor","Clark","Walker","Young",
+  "MacDonald","Stewart","Campbell","Fraser","Mitchell","Reid","Murray","Ross","Grant","Sinclair",
+  "Doiron","Basque","Boucher","Bourque","Caissie","Daigle","Godin","Guerette","Haché","Vautour",
+];
+
+// picks a team count that's always guaranteed to fit `numPlayers` under the
+// app's own roster caps (17 skaters / 1-2 goalies per team), instead of a
+// fixed number that might not fit — this is what broke the earlier
+// division presets, so the generator works it out itself every time
+function computeSafeTeamCount(numPlayers) {
+  let teams = Math.max(1, Math.ceil(numPlayers / 18));
+  for (let guard = 0; guard < 200; guard++) {
+    const goalies = Math.min(teams * 2, Math.max(teams, Math.round(numPlayers * 0.075)));
+    const skaters = numPlayers - goalies;
+    if (skaters <= teams * 17 && goalies >= teams && goalies <= teams * 2) {
+      return teams;
+    }
+    teams++;
+  }
+  return teams;
+}
+
+function generateMockData(numPlayers) {
+  const used = new Set();
+  const makeName = (gender) => {
+    for (let tries = 0; tries < 500; tries++) {
+      const fn = gender === "Male"
+        ? MOCK_FIRST_M[Math.floor(Math.random() * MOCK_FIRST_M.length)]
+        : MOCK_FIRST_F[Math.floor(Math.random() * MOCK_FIRST_F.length)];
+      const ln = MOCK_LAST[Math.floor(Math.random() * MOCK_LAST.length)];
+      const name = `${fn} ${ln}`;
+      if (!used.has(name)) {
+        used.add(name);
+        return name;
+      }
+    }
+    // exhausted the pool (only possible at very high player counts) — fall
+    // back to a numbered suffix so generation never fails
+    const name = `${gender === "Male" ? "Player" : "Player"} ${used.size + 1}`;
+    used.add(name);
+    return name;
+  };
+
+  const teamCount = computeSafeTeamCount(numPlayers);
+  const birthYears = [new Date().getFullYear() - 11, new Date().getFullYear() - 10];
+
+  const goalieCount = Math.min(teamCount * 2, Math.max(teamCount, Math.round(numPlayers * 0.075)));
+  const skaterCount = numPlayers - goalieCount;
+  const fwdCount = Math.round(skaterCount * 0.561);
+  const defCount = skaterCount - fwdCount;
+  const femaleGoalies = Math.round(goalieCount * 0.28);
+  const femaleSkaters = Math.round(skaterCount * 0.2);
+
+  const players = [];
+  const femaleGoalieSlots = new Set();
+  while (femaleGoalieSlots.size < femaleGoalies && femaleGoalieSlots.size < goalieCount) {
+    femaleGoalieSlots.add(Math.floor(Math.random() * goalieCount));
+  }
+  for (let i = 0; i < goalieCount; i++) {
+    const gender = femaleGoalieSlots.has(i) ? "Female" : "Male";
+    players.push({
+      name: makeName(gender),
+      birthYear: birthYears[Math.floor(Math.random() * birthYears.length)],
+      rating: 2 + Math.floor(Math.random() * 4),
+      gender,
+      position: "Goalie",
+      teammateRequest: "",
+      teammateReason: "",
+    });
+  }
+
+  const positions = [
+    ...Array(fwdCount).fill("Forward"),
+    ...Array(defCount).fill("Defense"),
+  ];
+  const genders = [
+    ...Array(femaleSkaters).fill("Female"),
+    ...Array(skaterCount - femaleSkaters).fill("Male"),
+  ];
+  // shuffle both independently
+  for (let i = positions.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [positions[i], positions[j]] = [positions[j], positions[i]];
+  }
+  for (let i = genders.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [genders[i], genders[j]] = [genders[j], genders[i]];
+  }
+
+  const skaters = [];
+  for (let i = 0; i < skaterCount; i++) {
+    skaters.push({
+      name: makeName(genders[i]),
+      birthYear: birthYears[Math.floor(Math.random() * birthYears.length)],
+      rating: 1 + Math.floor(Math.random() * 5),
+      gender: genders[i],
+      position: positions[i],
+      teammateRequest: "",
+      teammateReason: "",
+    });
+  }
+
+  // teammate requests, scaled relative to the original 98-skater baseline
+  const scale = skaterCount / 98;
+  const nSibling = Math.max(0, Math.round(6 * scale));
+  const nAvoid = Math.max(0, Math.round(4 * scale));
+  const nTransport = Math.max(0, Math.round(8 * scale));
+  const nFriend = Math.max(0, Math.round(12 * scale));
+
+  const pool = [...skaters];
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  let pIdx = 0;
+  const setRequest = (a, b, reasonA, reasonB) => {
+    a.teammateRequest = b.name;
+    a.teammateReason = reasonA;
+    if (reasonB) {
+      b.teammateRequest = a.name;
+      b.teammateReason = reasonB;
+    }
+  };
+  for (let i = 0; i < nSibling && pIdx + 1 < pool.length; i++, pIdx += 2)
+    setRequest(pool[pIdx], pool[pIdx + 1], "Sibling", "Sibling");
+  for (let i = 0; i < nAvoid && pIdx + 1 < pool.length; i++, pIdx += 2)
+    setRequest(pool[pIdx], pool[pIdx + 1], "Avoid", "Avoid");
+  for (let i = 0; i < nTransport && pIdx + 1 < pool.length; i++, pIdx += 2)
+    setRequest(pool[pIdx], pool[pIdx + 1], "Transportation");
+  for (let i = 0; i < nFriend && pIdx + 1 < pool.length; i++, pIdx += 2)
+    setRequest(pool[pIdx], pool[pIdx + 1], "Friend");
+
+  const allPlayers = [...players, ...skaters];
+  for (let i = allPlayers.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [allPlayers[i], allPlayers[j]] = [allPlayers[j], allPlayers[i]];
+  }
+
+  const playersCSV = [
+    "Name,Year of Birth,Rating,Gender,Position,Teammate Request,Teammate Reason",
+    ...allPlayers.map((p) =>
+      [p.name, p.birthYear, p.rating, p.gender, p.position, p.teammateRequest, p.teammateReason]
+        .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+        .join(",")
+    ),
+  ].join("\n");
+
+  // coaches: one per team, assistants pre-decided, a couple deliberately
+  // blank (no assistants / no kids) to reflect realistic variety
+  const assistantPoolSize = teamCount * 2 + 4;
+  const assistantPool = Array.from({ length: assistantPoolSize }, () =>
+    makeName(Math.random() < 0.5 ? "Male" : "Female")
+  );
+  for (let i = assistantPool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [assistantPool[i], assistantPool[j]] = [assistantPool[j], assistantPool[i]];
+  }
+  const kidsPool = [...skaters];
+  for (let i = kidsPool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [kidsPool[i], kidsPool[j]] = [kidsPool[j], kidsPool[i]];
+  }
+  const noAssistantIdx = Math.floor(teamCount / 3);
+  const noKidsIdx = Math.floor(teamCount / 2);
+  let aIdx = 0;
+  let kIdx = 0;
+  const coachRows = ["Coach,Coach Assistant 1,Coach Assistant 2,Coach Assistant 3,Childs Names"];
+  for (let i = 0; i < teamCount; i++) {
+    const cGender = i % 3 === 2 ? "Female" : "Male";
+    const coachName = makeName(cGender);
+    const nAsst = i === noAssistantIdx ? 0 : 1 + Math.floor(Math.random() * 2);
+    const reqs = assistantPool.slice(aIdx, aIdx + nAsst);
+    aIdx += nAsst;
+    while (reqs.length < 3) reqs.push("");
+    const nKids = i === noKidsIdx ? 0 : Math.random() < 0.67 ? 1 : 2;
+    const kids = kidsPool.slice(kIdx, kIdx + nKids).map((k) => k.name);
+    kIdx += nKids;
+    coachRows.push(
+      [coachName, reqs[0], reqs[1], reqs[2], kids.join("; ")]
+        .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+        .join(",")
+    );
+  }
+  const coachesCSV = coachRows.join("\n");
+
+  return {
+    playersCSV,
+    coachesCSV,
+    teamCount,
+    goalieCount,
+    skaterCount,
+    totalPlayers: numPlayers,
+    birthYears,
+  };
 }
 
 // ---------- core build ----------
@@ -197,6 +410,7 @@ function buildTeams(players, coaches, numTeams) {
         return;
       }
       const u = unitByPlayerIdx[p.idx];
+      p.isCoachChild = true;
       if (u.lockedTeam !== null && u.lockedTeam !== ci) {
         errors.push(
           `Conflict: the group containing ${u.names.join(
@@ -627,6 +841,7 @@ function buildTeams(players, coaches, numTeams) {
       const sameTeam = playerTeamIndex[p.idx] === playerTeamIndex[target.idx];
       // for Avoid, "fulfilled" means they were kept APART, not together
       const honored = isAvoid ? !sameTeam : sameTeam;
+      p.requestFulfilled = honored;
       const entry = {
         name: p.name,
         request: p.teammateRequest,
@@ -655,10 +870,26 @@ function downloadTextFile(filename, text, mime) {
 
 // ---------- CSV export ----------
 function exportCSV(teams) {
-  const rows = [["Team", "Coach", "Assistants", "Name", "Position", "Year of Birth", "Rating", "Gender"]];
+  const rows = [
+    [
+      "Team",
+      "Coach",
+      "Assistants",
+      "Name",
+      "Position",
+      "Year of Birth",
+      "Rating",
+      "Gender",
+      "Coach's Child",
+      "Teammate Request",
+      "Teammate Reason",
+      "Teammate Request Fulfilled",
+    ],
+  ];
   teams.forEach((t) => {
     t.units.forEach((u) => {
       u.members.forEach((m) => {
+        const hasRequest = !!m.teammateRequest;
         rows.push([
           t.index + 1,
           t.coach,
@@ -668,6 +899,10 @@ function exportCSV(teams) {
           m.birthYear,
           m.rating,
           m.gender,
+          m.isCoachChild ? "Yes" : "",
+          m.teammateRequest || "",
+          m.teammateReason || "",
+          hasRequest ? (m.requestFulfilled ? "Yes" : "No") : "",
         ]);
       });
     });
@@ -730,17 +965,22 @@ export default function TeamBalancer() {
   const [numTeams, setNumTeams] = useState(6);
   const [result, setResult] = useState(null);
   const [ran, setRan] = useState(false);
-  const [selectedDivision, setSelectedDivision] = useState(SAMPLE_DIVISIONS[0].slug);
+  const [mockPlayerCount, setMockPlayerCount] = useState(100);
+  const [mockData, setMockData] = useState(null);
 
-  const currentDivision = SAMPLE_DIVISIONS.find((d) => d.slug === selectedDivision);
+  const generateMock = () => {
+    const n = Math.max(20, Math.min(200, parseInt(mockPlayerCount, 10) || 100));
+    setMockPlayerCount(n);
+    setMockData(generateMockData(n));
+  };
 
-  const loadSampleDivision = () => {
-    const d = currentDivision;
-    setPlayersText(d.players);
-    setPlayersFilename(`players_${d.slug}_mock.csv (sample)`);
-    setCoachesText(d.coaches);
-    setCoachesFilename(`coaches_${d.slug}_mock.csv (sample)`);
-    setNumTeams(d.teamCount);
+  const loadMockIntoApp = () => {
+    if (!mockData) return;
+    setPlayersText(mockData.playersCSV);
+    setPlayersFilename(`players_mock_${mockData.totalPlayers}.csv (generated)`);
+    setCoachesText(mockData.coachesCSV);
+    setCoachesFilename(`coaches_mock_${mockData.totalPlayers}.csv (generated)`);
+    setNumTeams(mockData.teamCount);
     setResult(null);
     setRan(false);
   };
@@ -1064,47 +1304,55 @@ export default function TeamBalancer() {
           <div className="sampleBox">
             <div className="sampleBox-label">Sample data</div>
             <p className="sampleBox-hint">
-              Not sure of the format, or just want to try the app first? Each division below is a
-              complete, ready-to-use mock roster sized for that division's typical registration —
-              pick one to load it straight into the app or download the CSVs.
+              Not sure of the format, or just want to try the app first? Pick how many players you
+              want (up to 200) and generate a mock roster sized to match — the team count is worked
+              out automatically so it always fits the app's roster caps.
             </p>
             <div className="sampleBox-row">
-              <select
+              <input
+                type="number"
                 className="sampleSelect"
-                value={selectedDivision}
-                onChange={(e) => setSelectedDivision(e.target.value)}
-              >
-                {SAMPLE_DIVISIONS.map((d) => (
-                  <option key={d.slug} value={d.slug}>
-                    {d.label} — {d.totalPlayers} players / {d.teamCount} teams
-                  </option>
-                ))}
-              </select>
-              <button className="btn btn-primary" onClick={loadSampleDivision}>
-                Load into app
-              </button>
-              <button
-                className="btn btn-outline"
-                onClick={() =>
-                  downloadTextFile(`players_${currentDivision.slug}_mock.csv`, currentDivision.players)
-                }
-              >
-                Download players CSV
-              </button>
-              <button
-                className="btn btn-outline"
-                onClick={() =>
-                  downloadTextFile(`coaches_${currentDivision.slug}_mock.csv`, currentDivision.coaches)
-                }
-              >
-                Download coaches CSV
+                style={{ minWidth: 140 }}
+                min="20"
+                max="200"
+                value={mockPlayerCount}
+                onChange={(e) => setMockPlayerCount(e.target.value)}
+              />
+              <span style={{ fontSize: 14, color: "var(--muted)" }}>players (max 200)</span>
+              <button className="btn btn-primary" onClick={generateMock}>
+                Generate sample data
               </button>
             </div>
-            <p className="sampleBox-detail">
-              {currentDivision.label}: {currentDivision.totalPlayers} total players (
-              {currentDivision.goalies} goalies, {currentDivision.skaters} skaters) across{" "}
-              {currentDivision.teamCount} teams · birth years {currentDivision.birthYears.join(" / ")}
-            </p>
+            {mockData && (
+              <>
+                <p className="sampleBox-detail">
+                  {mockData.totalPlayers} total players ({mockData.goalieCount} goalies,{" "}
+                  {mockData.skaterCount} skaters) across {mockData.teamCount} teams · birth years{" "}
+                  {mockData.birthYears.join(" / ")}
+                </p>
+                <div className="sampleBox-row" style={{ marginTop: 10 }}>
+                  <button className="btn btn-primary" onClick={loadMockIntoApp}>
+                    Load into app
+                  </button>
+                  <button
+                    className="btn btn-outline"
+                    onClick={() =>
+                      downloadTextFile(`players_mock_${mockData.totalPlayers}.csv`, mockData.playersCSV)
+                    }
+                  >
+                    Download players CSV
+                  </button>
+                  <button
+                    className="btn btn-outline"
+                    onClick={() =>
+                      downloadTextFile(`coaches_mock_${mockData.totalPlayers}.csv`, mockData.coachesCSV)
+                    }
+                  >
+                    Download coaches CSV
+                  </button>
+                </div>
+              </>
+            )}
           </div>
 
           <div className="fileRow">

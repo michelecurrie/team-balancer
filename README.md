@@ -106,21 +106,24 @@ the app.
 
 ### Sample data
 
-The app ships with four ready-to-use mock rosters, one per division, sized
-to a division's typical registration numbers. Pick one from the "Sample
-data" dropdown in the app to either load it straight in or download the
-CSVs as a formatting reference:
+The app can generate a mock roster of any size, up to 200 players, entirely
+in the browser — useful for trying the app before touching your real data,
+or as a formatting reference. In the "Sample data" box:
 
-| Division | Total players | Goalies | Skaters | Teams | Birth years |
-|---|---|---|---|---|---|
-| U11 | 241 | 18 | 223 | 14 | 2015 / 2016 |
-| U13 | 189 | 14 | 175 | 11 | 2013 / 2014 |
-| U15 | 161 | 12 | 149 | 9 | 2011 / 2012 |
-| U18 | 153 | 11 | 142 | 9 | 2008 / 2009 |
+1. Enter how many players you want (20–200).
+2. Click **"Generate sample data"** — this creates a full players CSV and a
+   matching coaches CSV, with a realistic mix of positions, ratings,
+   genders, and Sibling/Avoid/Transportation/Friend requests scaled to the
+   roster size.
+3. Click **"Load into app"** to use it immediately, or download either CSV.
 
-Birth years in the sample data are illustrative — swap in whatever years
-your division actually uses; the app balances on whatever it finds in the
-`Year of Birth` column, not a fixed pair (see
+The team count is chosen automatically based on how many players you
+enter — it always picks a number of teams that fits within the app's own
+roster caps (max 17 skaters and 1–2 goalies per team), so a generated
+roster will never be too large to place. Birth years in generated data are
+illustrative (the two most recent youth-hockey birth years) — swap in
+whatever years your division actually uses; the app balances on whatever
+it finds in the `Year of Birth` column, not a fixed pair (see
 [How team formation works](#how-team-formation-works)).
 
 ---
@@ -210,7 +213,12 @@ After clicking **"Generate teams,"** you'll see:
 - **Team cards** - one per team, showing the coach, assistants, goalie/
   forward/defense counts, average ratings, female count, birth-year split,
   4+/under-2 rated counts, and the full roster.
-- **Export rosters as CSV** - downloads the final team assignments.
+- **Export rosters as CSV** - downloads the final team assignments, including
+  each player's team, coach, assistants, and position/rating/gender/birth
+  year — plus two columns not shown elsewhere: **Coach's Child** (Yes if
+  that player was one of the coach's own listed children) and **Teammate
+  Request Fulfilled** (Yes/No if the player made a teammate request, blank
+  if they didn't make one).
 
 ---
 
