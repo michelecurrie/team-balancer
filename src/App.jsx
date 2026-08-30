@@ -107,7 +107,7 @@ const MOCK_LAST = [
 ];
 
 // picks a team count that's always guaranteed to fit `numPlayers` under the
-// app's own roster caps (17 skaters / 1-2 goalies per team), instead of a
+// app's own roster caps (18 skaters / 1-2 goalies per team), instead of a
 // fixed number that might not fit — this is what broke the earlier
 // division presets, so the generator works it out itself every time
 function computeSafeTeamCount(numPlayers) {
@@ -115,7 +115,7 @@ function computeSafeTeamCount(numPlayers) {
   for (let guard = 0; guard < 200; guard++) {
     const goalies = Math.min(teams * 2, Math.max(teams, Math.round(numPlayers * 0.075)));
     const skaters = numPlayers - goalies;
-    if (skaters <= teams * 17 && goalies >= teams && goalies <= teams * 2) {
+    if (skaters <= teams * 18 && goalies >= teams && goalies <= teams * 2) {
       return teams;
     }
     teams++;
@@ -317,7 +317,7 @@ function buildTeams(players, coaches, numTeams) {
     errors.push(
       `${unrecognizedPositions.length} player${unrecognizedPositions.length > 1 ? "s have" : " has"} a Position value that isn't recognized as Goalie, Forward, or Defense (${examples.join(
         ", "
-      )}${unrecognizedPositions.length > 5 ? ", ..." : ""}) — these players were NOT counted toward position balance or the 17-skater roster cap. Fix the Position column and re-run: ${unrecognizedPositions
+      )}${unrecognizedPositions.length > 5 ? ", ..." : ""}) — these players were NOT counted toward position balance or the 18-skater roster cap. Fix the Position column and re-run: ${unrecognizedPositions
         .slice(0, 10)
         .map((p) => p.name)
         .join(", ")}${unrecognizedPositions.length > 10 ? ", ..." : ""}`
@@ -591,9 +591,9 @@ function buildTeams(players, coaches, numTeams) {
       `${totalGoalies} goalies across ${teamCount} teams doesn't evenly satisfy 1-2 per team — some teams may end up short or over.`
     );
   }
-  if (totalSkaters > teamCount * 17) {
+  if (totalSkaters > teamCount * 18) {
     errors.push(
-      `${totalSkaters} skaters exceed the maximum capacity of ${teamCount * 17} (${teamCount} teams x 17). Some players will not be placed.`
+      `${totalSkaters} skaters exceed the maximum capacity of ${teamCount * 18} (${teamCount} teams x 18). Some players will not be placed.`
     );
   }
 
@@ -622,7 +622,7 @@ function buildTeams(players, coaches, numTeams) {
   });
 
   const GOALIE_CAP = 2;
-  const SKATER_CAP = 17;
+  const SKATER_CAP = 18;
 
   function canPlace(team, unit) {
     if (team.goalieCount + unit.goalieCount > GOALIE_CAP) return false;
@@ -1610,8 +1610,8 @@ export default function TeamBalancer() {
                     </div>
                     <div className="teamCard-body">
                       <StatBar label="Goalies" value={t.goalieCount} max={2} />
-                      <StatBar label="Forwards" value={t.forwardCount} max={17} />
-                      <StatBar label="Defense" value={t.defenseCount} max={17} />
+                      <StatBar label="Forwards" value={t.forwardCount} max={18} />
+                      <StatBar label="Defense" value={t.defenseCount} max={18} />
                       <div
                         style={{
                           display: "flex",
