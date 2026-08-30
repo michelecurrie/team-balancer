@@ -95,14 +95,19 @@ automatically.
 
 ### Coaches CSV
 
+One row per coach — every head coach **and** every assistant coach goes in
+this same file, not just heads.
+
 | Column | Required | Notes |
 |---|---|---|
-| `Coach` | Yes | Head coach name. One row = one team. |
-| `Coach Assistant 1` / `2` / `3` | No | Assistant coaches already decided — not requests, these are final. Leave blank if a coach has no assistants yet. |
-| `Childs Names` | No | Semicolon-separated if more than one (`Jane Doe; John Doe`). Leave blank for coaches with no kids on the roster. Matched players are automatically locked to that coach's team, the same as a sibling request. |
+| `Coach` | Yes | The coach's name. |
+| `Role` | Yes | `Head` or `Assistant`. The number of `Head` rows must equal the number of teams you set — each team is anchored to one head coach. |
+| `Coach Request 1` / `2` / `3` | No | Up to 3 other coaches (head or assistant, by name) this person wants to coach with. Not a final assignment — the app resolves these into groups (see [Priority order](#priority-order) below). |
+| `Childs Names` | No | Semicolon-separated if more than one (`Jane Doe; John Doe`). Leave blank if this coach has no kids on the roster. Matched players are automatically locked to wherever *this coach* ends up — an assistant's child follows the assistant's resolved team, not the team they happened to be listed near in the CSV. |
 
-The number of rows in this file must equal the number of teams you set in
-the app.
+The number of `Head`-role rows must equal the number of teams you set in
+the app. Assistant rows are additional — there's no fixed number of
+assistants per team.
 
 ### Sample data
 
@@ -112,9 +117,10 @@ or as a formatting reference. In the "Sample data" box:
 
 1. Enter how many players you want (20–200).
 2. Click **"Generate sample data"** — this creates a full players CSV and a
-   matching coaches CSV, with a realistic mix of positions, ratings,
-   genders, and Sibling/Avoid/Transportation/Friend requests scaled to the
-   roster size.
+   matching coaches CSV (head and assistant coaches, some with coaching
+   requests, some with children on the roster), with a realistic mix of
+   positions, ratings, genders, and Sibling/Avoid/Transportation/Friend
+   requests scaled to the roster size.
 3. Click **"Load into app"** to use it immediately, or download either CSV.
 
 The team count is chosen automatically based on how many players you
@@ -140,14 +146,20 @@ reports the conflict as an error rather than failing silently. The last
 two are **best effort** — honored whenever possible, sacrificed first when
 they'd force a team badly out of balance.
 
-1. **Coach / assistant coach pairings** - exactly as listed in the coaches
-   CSV. Each assistant is assumed to belong to one team only; if the same
-   assistant name appears under two different coaches, that's flagged as a
-   data-entry error rather than resolved automatically.
+1. **Coaches who want to coach together** - any coach, head or assistant,
+   can list up to 3 other coaches (by name) they want to work with. These
+   are requests, not final assignments: the app groups requested coaches
+   onto the same team wherever that's structurally possible. Each group
+   anchors to whichever head coach is in it. A request that would require
+   combining two different head coaches' teams into one can't be honored -
+   that's reported as an error rather than silently dropped or arbitrarily
+   picked. Assistants with no request, or whose request didn't resolve,
+   are spread evenly across teams so no team gets stuck with zero help.
 2. **Sibling requests** (`Teammate Reason = Sibling`) - always kept
    together. A coach's own listed children are treated identically -
-   automatically locked to that coach's team, whether or not they also
-   have a `Sibling` request on file.
+   automatically locked to wherever that coach's own coaching-request
+   resolution placed them, whether or not the child also has a `Sibling`
+   request on file.
 3. **Avoid requests** (`Teammate Reason = Avoid`) - always kept apart.
 4. **Transportation requests** (`Teammate Reason = Transportation`) - kept
    together when it doesn't come at too much cost to balance.

@@ -31,10 +31,11 @@ function loadCoaches(text) {
   return parseCSV(text).map((r, i) => ({
     idx: i,
     name: r["Coach"],
-    assistants: [
-      r["Coach Assistant 1"],
-      r["Coach Assistant 2"],
-      r["Coach Assistant 3"],
+    role: r["Role"],
+    requests: [
+      r["Coach Request 1"],
+      r["Coach Request 2"],
+      r["Coach Request 3"],
     ].filter((x) => x),
     childNames: (r["Childs Names"] || "")
       .split(";")
@@ -227,41 +228,44 @@ function generateMockData(numPlayers) {
     ),
   ].join("\n");
 
-  // coaches: one per team, assistants pre-decided, a couple deliberately
-  // blank (no assistants / no kids) to reflect realistic variety
-  const assistantPoolSize = teamCount * 2 + 4;
-  const assistantPool = Array.from({ length: assistantPoolSize }, () =>
-    makeName(Math.random() < 0.5 ? "Male" : "Female")
-  );
-  for (let i = assistantPool.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [assistantPool[i], assistantPool[j]] = [assistantPool[j], assistantPool[i]];
-  }
+  // coaches: one Head row per team, plus a handful of Assistant rows. Each
+  // assistant lists up to 3 "who I want to coach with" requests — most list
+  // their intended head coach as request #1 so they land correctly, a few
+  // have none at all (to exercise the fallback distribution for coaches with
+  // no successful request), and one team deliberately has zero assistants.
   const kidsPool = [...skaters];
   for (let i = kidsPool.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [kidsPool[i], kidsPool[j]] = [kidsPool[j], kidsPool[i]];
   }
   const noAssistantIdx = Math.floor(teamCount / 3);
-  const noKidsIdx = Math.floor(teamCount / 2);
-  let aIdx = 0;
+  const noKidsHeadIdx = Math.floor(teamCount / 2);
   let kIdx = 0;
-  const coachRows = ["Coach,Coach Assistant 1,Coach Assistant 2,Coach Assistant 3,Childs Names"];
+  const csvRow = (vals) => vals.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",");
+  const coachRows = ["Coach,Role,Coach Request 1,Coach Request 2,Coach Request 3,Childs Names"];
+  const headNames = [];
   for (let i = 0; i < teamCount; i++) {
     const cGender = i % 3 === 2 ? "Female" : "Male";
-    const coachName = makeName(cGender);
-    const nAsst = i === noAssistantIdx ? 0 : 1 + Math.floor(Math.random() * 2);
-    const reqs = assistantPool.slice(aIdx, aIdx + nAsst);
-    aIdx += nAsst;
-    while (reqs.length < 3) reqs.push("");
-    const nKids = i === noKidsIdx ? 0 : Math.random() < 0.67 ? 1 : 2;
+    const headName = makeName(cGender);
+    headNames.push(headName);
+    const nKids = i === noKidsHeadIdx ? 0 : Math.random() < 0.67 ? 1 : 2;
     const kids = kidsPool.slice(kIdx, kIdx + nKids).map((k) => k.name);
     kIdx += nKids;
-    coachRows.push(
-      [coachName, reqs[0], reqs[1], reqs[2], kids.join("; ")]
-        .map((v) => `"${String(v).replace(/"/g, '""')}"`)
-        .join(",")
-    );
+    coachRows.push(csvRow([headName, "Head", "", "", "", kids.join("; ")]));
+  }
+  for (let i = 0; i < teamCount; i++) {
+    const nAsst = i === noAssistantIdx ? 0 : 1 + Math.floor(Math.random() * 2);
+    for (let j = 0; j < nAsst; j++) {
+      const aName = makeName(Math.random() < 0.5 ? "Male" : "Female");
+      const hasKid = Math.random() < 0.2;
+      const kids = hasKid ? kidsPool.slice(kIdx, kIdx + 1).map((k) => k.name) : [];
+      if (hasKid) kIdx += 1;
+      coachRows.push(csvRow([aName, "Assistant", headNames[i], "", "", kids.join("; ")]));
+    }
+  }
+  if (teamCount > 0) {
+    const floatName = makeName(Math.random() < 0.5 ? "Male" : "Female");
+    coachRows.push(csvRow([floatName, "Assistant", "", "", "", ""]));
   }
   const coachesCSV = coachRows.join("\n");
 
@@ -281,42 +285,131 @@ function buildTeams(players, coaches, numTeams) {
   const errors = [];
   const warnings = [];
 
-  if (coaches.length !== numTeams) {
+  const headCoaches = coaches.filter((c) => key(c.role) === "head");
+  const isHead = (c) => key(c.role) === "head";
+
+  if (headCoaches.length !== numTeams) {
     errors.push(
-      `Team count mismatch: you set ${numTeams} teams, but the coach file has ${coaches.length} coaches. Each team needs exactly one head coach.`
+      `Team count mismatch: you set ${numTeams} teams, but the coach file has ${headCoaches.length} coaches marked Role = Head. Each team needs exactly one head coach.`
     );
   }
-  const teamCount = Math.min(numTeams, coaches.length) || numTeams;
+  const teamCount = Math.min(numTeams, headCoaches.length) || numTeams;
 
-  // ---- assistant coaches are pre-decided by the user, assigned directly per team ----
-  // (still validate: the same assistant name shouldn't appear under two different
-  // head coaches — that's a spreadsheet data-entry mistake, not something to resolve)
-  const assistantAssignment = {}; // assistantKey -> coachIndex
-  const assistantSeenBy = {}; // assistantKey -> [coachIndex,...]
-  coaches.forEach((c, ci) => {
-    c.assistants.forEach((a) => {
-      const k = key(a);
-      if (!k) return;
-      if (!assistantSeenBy[k]) assistantSeenBy[k] = [];
-      assistantSeenBy[k].push(ci);
-      if (assistantAssignment[k] === undefined) assistantAssignment[k] = ci;
-    });
+  // head coach original index -> team index (0..teamCount-1), in CSV order
+  const headTeamIdx = {};
+  headCoaches.slice(0, teamCount).forEach((c, ti) => {
+    headTeamIdx[c.idx] = ti;
   });
-  Object.entries(assistantSeenBy).forEach(([akey, coachIdxs]) => {
-    const unique = [...new Set(coachIdxs)];
-    if (unique.length > 1) {
-      const displayName =
-        coaches.flatMap((c) => c.assistants).find((a) => key(a) === akey) || akey;
-      errors.push(
-        `Data entry issue: ${displayName} is listed as an assistant coach for more than one team (${unique
-          .map((ci) => coaches[ci].name)
-          .join(
-            ", "
-          )}). Each assistant should appear under only one head coach — fix this in coaches.csv.`
+  const teamHeadName = Array.from(
+    { length: teamCount },
+    (_, ti) => headCoaches[ti]?.name || `(missing head coach ${ti + 1})`
+  );
+
+  // ---- resolve "who I want to coach with" requests into teams ----
+  // Every coach (head or assistant) can list up to 3 other coaches they want
+  // to coach with. This is treated as a hard, highest-priority requirement:
+  // requested coaches are grouped together and placed on the same team
+  // whenever that's possible. The only time it truly can't be honored is
+  // when a chain of requests would merge two different head coaches' teams
+  // into one — that specific request is refused and reported as an error,
+  // rather than silently dropped.
+  const coachByName = {};
+  coaches.forEach((c) => {
+    if (c.name) coachByName[key(c.name)] = c;
+  });
+  const coachNameCounts = {};
+  coaches.forEach((c) => {
+    const k = key(c.name);
+    if (!k) return;
+    coachNameCounts[k] = (coachNameCounts[k] || 0) + 1;
+  });
+  Object.entries(coachNameCounts).forEach(([k, count]) => {
+    if (count > 1) {
+      const displayName = coaches.find((c) => key(c.name) === k)?.name || k;
+      warnings.push(
+        `"${displayName}" appears more than once in the coaches list — coaching requests referencing this name may not resolve to the row you expect.`
       );
     }
   });
+  const cuf = new UF(coaches.length);
+  const headsInGroup = (root) =>
+    coaches.filter((c) => cuf.find(c.idx) === root && isHead(c));
 
+  coaches.forEach((c) => {
+    (c.requests || []).forEach((reqName) => {
+      if (!reqName) return;
+      const target = coachByName[key(reqName)];
+      if (!target) {
+        warnings.push(
+          `${c.name}'s coaching request "${reqName}" was not found in the coaches list.`
+        );
+        return;
+      }
+      if (target.idx === c.idx) return;
+      const rootA = cuf.find(c.idx);
+      const rootB = cuf.find(target.idx);
+      if (rootA === rootB) return;
+      const headsA = headsInGroup(rootA);
+      const headsB = headsInGroup(rootB);
+      if (headsA.length > 0 && headsB.length > 0) {
+        errors.push(
+          `Coaching conflict: ${c.name} wants to coach with ${target.name}, but that would combine Team ${
+            headTeamIdx[headsA[0].idx] + 1
+          } (${headsA[0].name}) and Team ${headTeamIdx[headsB[0].idx] + 1} (${
+            headsB[0].name
+          }) into one team — that isn't possible, so this request could not be honored.`
+        );
+        return;
+      }
+      cuf.union(c.idx, target.idx);
+    });
+  });
+
+  // group coaches by their final union-find root
+  const coachGroups = {};
+  coaches.forEach((c) => {
+    const r = cuf.find(c.idx);
+    if (!coachGroups[r]) coachGroups[r] = [];
+    coachGroups[r].push(c);
+  });
+
+  // assign each group to a team: anchored to its head coach if it has one,
+  // otherwise held aside as "floating" (assistants who never connected to a
+  // head coach through a request) and distributed evenly further down
+  const coachFinalTeam = {}; // coach.idx -> team index
+  const floatingGroups = [];
+  Object.values(coachGroups).forEach((group) => {
+    const heads = group.filter(isHead);
+    if (heads.length === 0) {
+      floatingGroups.push(group);
+    } else {
+      const ti = headTeamIdx[heads[0].idx];
+      group.forEach((c) => {
+        coachFinalTeam[c.idx] = ti;
+      });
+    }
+  });
+
+  // distribute floating assistant groups round-robin onto whichever team
+  // currently has the fewest assistants, so they don't all pile onto one team
+  if (teamCount > 0) {
+    const assistantCountPerTeam = Array(teamCount).fill(0);
+    Object.entries(coachFinalTeam).forEach(([idx, ti]) => {
+      if (!isHead(coaches[idx])) assistantCountPerTeam[ti]++;
+    });
+    floatingGroups
+      .sort((a, b) => b.length - a.length)
+      .forEach((group) => {
+        let best = 0;
+        for (let i = 1; i < teamCount; i++) {
+          if (assistantCountPerTeam[i] < assistantCountPerTeam[best]) best = i;
+        }
+        group.forEach((c) => {
+          coachFinalTeam[c.idx] = best;
+        });
+        assistantCountPerTeam[best] += group.length;
+      });
+  }
 
   // ---- player index ----
   const byName = {};
@@ -400,7 +493,12 @@ function buildTeams(players, coaches, numTeams) {
   units.forEach((u) => u.members.forEach((m) => (unitByPlayerIdx[m.idx] = u)));
 
   // ---- lock units to coaches via children ----
-  coaches.slice(0, teamCount).forEach((c, ci) => {
+  // uses each coach's RESOLVED team (head coaches: their own team; assistants:
+  // wherever their coaching request landed them), so an assistant's child ends
+  // up on the assistant's actual team, not wherever they were originally listed
+  coaches.forEach((c) => {
+    const ti = isHead(c) ? headTeamIdx[c.idx] : coachFinalTeam[c.idx];
+    if (ti === undefined) return;
     c.childNames.forEach((childName) => {
       const p = byName[key(childName)];
       if (!p) {
@@ -411,18 +509,18 @@ function buildTeams(players, coaches, numTeams) {
       }
       const u = unitByPlayerIdx[p.idx];
       p.isCoachChild = true;
-      if (u.lockedTeam !== null && u.lockedTeam !== ci) {
+      if (u.lockedTeam !== null && u.lockedTeam !== ti) {
         errors.push(
           `Conflict: the group containing ${u.names.join(
             ", "
           )} is required on both Team ${u.lockedTeam + 1} (${
-            coaches[u.lockedTeam].name
-          }) and Team ${ci + 1} (${c.name}) due to sibling/child links. Kept on Team ${
+            teamHeadName[u.lockedTeam]
+          }) and Team ${ti + 1} (${c.name}) due to sibling/child links. Kept on Team ${
             u.lockedTeam + 1
           }.`
         );
       } else {
-        u.lockedTeam = ci;
+        u.lockedTeam = ti;
       }
     });
   });
@@ -463,7 +561,7 @@ function buildTeams(players, coaches, numTeams) {
   // ---- initialize team accumulators ----
   const teams = Array.from({ length: teamCount }, (_, i) => ({
     index: i,
-    coach: coaches[i] ? coaches[i].name : `(missing coach ${i + 1})`,
+    coach: teamHeadName[i],
     assistants: [],
     goalieCount: 0,
     goalieRatingSum: 0,
@@ -478,12 +576,10 @@ function buildTeams(players, coaches, numTeams) {
     birthYears: {},
     units: [],
   }));
-  Object.entries(assistantAssignment).forEach(([akey, ci]) => {
-    if (teams[ci]) {
-      const displayName =
-        coaches.flatMap((c) => c.assistants).find((a) => key(a) === akey) || akey;
-      teams[ci].assistants.push(displayName);
-    }
+  coaches.forEach((c) => {
+    if (isHead(c)) return;
+    const ti = coachFinalTeam[c.idx];
+    if (teams[ti]) teams[ti].assistants.push(c.name);
   });
 
   const GOALIE_CAP = 2;
@@ -1233,8 +1329,9 @@ export default function TeamBalancer() {
         <h1>Balance the Bench</h1>
         <p>
           Upload your player and coach spreadsheets, set the number of teams, and let the builder
-          honor your coach/assistant pairings, siblings, and avoid pairs first — then balance
-          strength, position, birth year, and pairing rules as closely as possible around them.
+          match coaches who want to work together, honor siblings and avoid pairs first — then
+          balance strength, position, birth year, and pairing rules as closely as possible around
+          them.
         </p>
       </div>
 
@@ -1253,20 +1350,24 @@ export default function TeamBalancer() {
               <p>
                 Requests are honored in this order. The first three are treated as{" "}
                 <strong>hard requirements</strong> — the app will not break them to improve
-                balance, and will show an error if they can't all be satisfied at once (e.g. two
-                head coaches both need the same assistant). The last two are{" "}
+                balance, and will show an error if they can't all be satisfied at once (e.g. a
+                chain of coaching requests that would merge two different teams). The last two are{" "}
                 <strong>best effort</strong> — honored whenever possible, but sacrificed first if
                 honoring them would force a team badly out of balance.
               </p>
               <ol className="priorityList">
                 <li>
-                  <strong>Coach / assistant coach pairings</strong> — exactly as listed in the
-                  coaches CSV. Each assistant is assumed to belong to one team only.
+                  <strong>Coaches who want to coach together</strong> — any coach (head or
+                  assistant) can list up to 3 other coaches they want to work with. They're grouped
+                  onto the same team whenever possible. Groups anchor to whichever head coach is in
+                  them; a request that would combine two different head coaches' teams can't be
+                  honored and is reported as an error instead. Assistants with no successful
+                  request are spread evenly across teams.
                 </li>
                 <li>
                   <strong>Sibling requests</strong> (Teammate Reason = Sibling) — always kept
                   together. A coach's own listed children are treated the same way, automatically
-                  locked to that coach's team.
+                  locked to whichever team that coach ends up on.
                 </li>
                 <li>
                   <strong>Avoid requests</strong> (Teammate Reason = Avoid) — always kept apart.
@@ -1296,9 +1397,10 @@ export default function TeamBalancer() {
           <h2>1. Upload rosters</h2>
           <p className="sub">
             Players CSV needs: Name, Year of Birth, Rating, Gender, Position (Goalie / Forward /
-            Defense), Teammate Request, Teammate Reason. Coaches CSV needs: Coach, Coach Assistant
-            1–3, Childs Names — list your head coach and their already-decided assistant coach(es)
-            on the same row. Childs Names can be left blank for coaches with no kids on the team.
+            Defense), Teammate Request, Teammate Reason. Coaches CSV needs: Coach, Role (Head or
+            Assistant — one row per coach, head or assistant), Coach Request 1–3 (up to 3 other
+            coaches this person wants to coach with), Childs Names. Coach Request and Childs Names
+            can be left blank.
           </p>
 
           <div className="sampleBox">
