@@ -5,6 +5,19 @@ import Papa from "papaparse";
 const norm = (s) => (s || "").toString().trim();
 const key = (s) => norm(s).toLowerCase();
 
+// Accepts common real-world spelling/abbreviation variants (e.g. British
+// "Defence") and canonicalizes them, instead of silently failing to match a
+// single hardcoded spelling. Returns null for anything unrecognized so the
+// caller can flag it loudly rather than have that player quietly vanish
+// from position-based balancing and the roster cap check.
+function normalizePosition(raw) {
+  const k = key(raw);
+  if (["goalie", "goaltender", "goalkeeper", "g"].includes(k)) return "Goalie";
+  if (["forward", "fwd", "f"].includes(k)) return "Forward";
+  if (["defense", "defence", "def", "d"].includes(k)) return "Defense";
+  return null;
+}
+
 function parseCSV(text) {
   const res = Papa.parse(text, { header: true, skipEmptyLines: true });
   return res.data.map((row) => {
@@ -15,16 +28,23 @@ function parseCSV(text) {
 }
 
 function loadPlayers(text) {
-  return parseCSV(text).map((r, i) => ({
-    idx: i,
-    name: r["Name"],
-    birthYear: parseInt(r["Year of Birth"], 10),
-    rating: parseInt(r["Rating"], 10),
-    gender: r["Gender"],
-    position: r["Position"], // Goalie / Forward / Defense
-    teammateRequest: r["Teammate Request"],
-    teammateReason: r["Teammate Reason"],
-  }));
+  return parseCSV(text).map((r, i) => {
+    const normalizedPosition = normalizePosition(r["Position"]);
+    return {
+      idx: i,
+      name: r["Name"],
+      birthYear: parseInt(r["Year of Birth"], 10),
+      rating: parseFloat(r["Rating"]),
+      gender: r["Gender"],
+      // canonicalized when recognized (handles "Defence" etc.); otherwise the
+      // raw value is kept as-is so an error message can show exactly what
+      // was in the file
+      position: normalizedPosition || r["Position"],
+      positionRecognized: !!normalizedPosition,
+      teammateRequest: r["Teammate Request"],
+      teammateReason: r["Teammate Reason"],
+    };
+  });
 }
 
 function loadCoaches(text) {
@@ -284,6 +304,25 @@ function generateMockData(numPlayers) {
 function buildTeams(players, coaches, numTeams) {
   const errors = [];
   const warnings = [];
+
+  // ---- position validation ----
+  // A player whose Position doesn't resolve to Goalie/Forward/Defense would
+  // otherwise silently fall out of position-based balancing AND the skater
+  // roster cap entirely — they'd still get placed, just with none of the
+  // position logic applied to them. That's a serious, easy-to-miss failure
+  // mode, so it's caught loudly here instead.
+  const unrecognizedPositions = players.filter((p) => !p.positionRecognized);
+  if (unrecognizedPositions.length > 0) {
+    const examples = [...new Set(unrecognizedPositions.map((p) => `"${p.position}"`))].slice(0, 5);
+    errors.push(
+      `${unrecognizedPositions.length} player${unrecognizedPositions.length > 1 ? "s have" : " has"} a Position value that isn't recognized as Goalie, Forward, or Defense (${examples.join(
+        ", "
+      )}${unrecognizedPositions.length > 5 ? ", ..." : ""}) — these players were NOT counted toward position balance or the 17-skater roster cap. Fix the Position column and re-run: ${unrecognizedPositions
+        .slice(0, 10)
+        .map((p) => p.name)
+        .join(", ")}${unrecognizedPositions.length > 10 ? ", ..." : ""}`
+    );
+  }
 
   const headCoaches = coaches.filter((c) => key(c.role) === "head");
   const isHead = (c) => key(c.role) === "head";
@@ -1397,7 +1436,8 @@ export default function TeamBalancer() {
           <h2>1. Upload rosters</h2>
           <p className="sub">
             Players CSV needs: Name, Year of Birth, Rating, Gender, Position (Goalie / Forward /
-            Defense), Teammate Request, Teammate Reason. Coaches CSV needs: Coach, Role (Head or
+            Defense — "Defence", "Def", "Fwd" and single-letter abbreviations are also recognized),
+            Teammate Request, Teammate Reason. Coaches CSV needs: Coach, Role (Head or
             Assistant — one row per coach, head or assistant), Coach Request 1–3 (up to 3 other
             coaches this person wants to coach with), Childs Names. Coach Request and Childs Names
             can be left blank.

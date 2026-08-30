@@ -87,9 +87,9 @@ automatically.
 |---|---|---|
 | `Name` | Yes | Must be unique — teammate requests and coaches' children are matched by exact name. |
 | `Year of Birth` | Yes | e.g. `2014`, `2015`. Works with any birth years present in your data — used to balance the birth-year split across teams. |
-| `Rating` | Yes | Integer `1`-`5`. Drives strength balancing and the 4+/under-2 spread. |
+| `Rating` | Yes | `1`-`5`, decimals are fine (e.g. `3.5`). Drives strength balancing and the 4+/under-2 spread. |
 | `Gender` | Yes | `Male` or `Female`. Used for the female-pairing rule. |
-| `Position` | Yes | `Goalie`, `Forward`, or `Defense`. |
+| `Position` | Yes | `Goalie`, `Forward`, or `Defense`. Common variants are also recognized (case-insensitive): `Defence`, `Def`, `D`, `Fwd`, `F`, `Goaltender`, `Goalkeeper`, `G`. Anything else is flagged as an error rather than silently ignored — an unrecognized position previously meant that player was invisible to position balancing and the roster cap, which was a real bug fixed in this version. |
 | `Teammate Request` | No | Name of another player, exactly matching their `Name` field. |
 | `Teammate Reason` | No | One of `Sibling`, `Avoid`, `Transportation`, `Friend`. Required if `Teammate Request` is set. |
 
@@ -267,3 +267,13 @@ install step to `npm install` instead.
 attention" and "Teammate requests" sections first - an unusual result is
 often the visible trade-off of a hard requirement (a large sibling group,
 several avoid pairs, or a coach's kids) rather than a bug.
+
+**Balance looks completely ignored, not just imperfect.** Check the "Needs
+attention" errors for a Position warning first. A `Position` value the app
+doesn't recognize (a typo, or a spelling like "Defence" that an older
+version of the app didn't accept) makes that player invisible to position
+balancing *and* to the 17-skater roster cap - they still get placed, just
+with none of the position logic applied, which can produce teams far over
+or under the cap. This version accepts common variants (see the CSV format
+table above); any value it still can't recognize is now reported as an
+error rather than failing silently.
