@@ -597,6 +597,13 @@ function buildTeams(players, coaches, numTeams) {
     );
   }
 
+  // Every team should end up the same total size (goalies + skaters), with at
+  // most 1 extra player on some teams when the roster doesn't divide evenly.
+  // e.g. 148 players / 8 teams -> 4 teams of 19, 4 teams of 18.
+  const totalRosterCount = totalGoalies + totalSkaters;
+  const baseTeamSize = Math.floor(totalRosterCount / teamCount);
+  const maxTeamSize = Math.ceil(totalRosterCount / teamCount); // baseTeamSize, or +1 if there's a remainder
+
   // ---- initialize team accumulators ----
   const teams = Array.from({ length: teamCount }, (_, i) => ({
     index: i,
@@ -623,14 +630,44 @@ function buildTeams(players, coaches, numTeams) {
 
   const GOALIE_CAP = 2;
   const SKATER_CAP = 18;
+  // number of teams allowed to have baseTeamSize+1 (the "remainder" players)
+  const bonusSlots = totalRosterCount % teamCount;
 
-  function canPlace(team, unit) {
+  function teamTotal(t) {
+    return t.goalieCount + t.forwardCount + t.defenseCount;
+  }
+
+  // A single fixed ceiling for every team isn't enough to guarantee a ±1
+  // spread: more than `bonusSlots` teams could each independently reach that
+  // ceiling, which then starves whichever teams are left, pushing them more
+  // than 1 below the rest. So the cap for a given team is dynamic — once
+  // `bonusSlots` teams have already claimed the +1 tier, everyone else is
+  // held to the plain baseTeamSize.
+  function effectiveCapFor(team) {
+    if (bonusSlots === 0) return baseTeamSize;
+    if (teamTotal(team) >= maxTeamSize) return maxTeamSize;
+    const teamsAtBonusTier = teams.filter((t) => t !== team && teamTotal(t) >= maxTeamSize).length;
+    return teamsAtBonusTier >= bonusSlots ? baseTeamSize : maxTeamSize;
+  }
+
+  // just the hard absolute limits (18 skaters, 1-2 goalies) — used as a
+  // fallback tier that's still stricter than "anything goes" when the
+  // equal-size target and an avoid request can't both be honored
+  function withinAbsoluteCaps(team, unit) {
     if (team.goalieCount + unit.goalieCount > GOALIE_CAP) return false;
     if (
       team.forwardCount + team.defenseCount + unit.forwardCount + unit.defenseCount >
       SKATER_CAP
     )
       return false;
+    return true;
+  }
+
+  function canPlace(team, unit) {
+    if (!withinAbsoluteCaps(team, unit)) return false;
+    // keep every team at the same total size (±1 for an uneven roster)
+    const unitSize = unit.goalieCount + unit.forwardCount + unit.defenseCount;
+    if (teamTotal(team) + unitSize > effectiveCapFor(team)) return false;
     return true;
   }
   function violatesAvoid(team, unit) {
@@ -668,6 +705,14 @@ function buildTeams(players, coaches, numTeams) {
     // weighted heavily so count balance wins out over small rating differences
     cost += Math.abs(newFwdCount - idealFwdPerTeam) * 4;
     cost += Math.abs(newDefCount - idealDefPerTeam) * 4;
+    // keep every team's TOTAL roster size (goalies + skaters) as even as
+    // possible — weighted above position balance since an equal team size is
+    // the top ask here; the hard cap in canPlace already prevents any team
+    // from exceeding its share, this just steers placement to fill evenly
+    // rather than letting one team hit the cap early while another lags
+    const newTotal =
+      team.goalieCount + team.forwardCount + team.defenseCount + unit.goalieCount + unit.forwardCount + unit.defenseCount;
+    cost += Math.abs(newTotal - totalRosterCount / teamCount) * 12;
     // spread out top-rated (4+) and bottom-rated (<2) skaters instead of letting
     // them cluster on the same team
     const newHigh = team.highRatedCount + unit.highRatedCount;
@@ -736,8 +781,15 @@ function buildTeams(players, coaches, numTeams) {
   movableGoalieUnits.forEach((u) => {
     let candidates = teams.filter((t) => canPlace(t, u) && !violatesAvoid(t, u));
     if (candidates.length === 0) {
-      candidates = teams.filter((t) => !violatesAvoid(t, u));
-      if (candidates.length === 0) candidates = teams;
+      // relax the equal-size target first, but keep the avoid request and
+      // the absolute 1-2 goalie cap intact if at all possible
+      candidates = teams.filter((t) => withinAbsoluteCaps(t, u) && !violatesAvoid(t, u));
+      if (candidates.length === 0) {
+        // avoid can't be honored alongside the goalie cap either — relax
+        // avoid next, still trying to respect the absolute cap
+        candidates = teams.filter((t) => withinAbsoluteCaps(t, u));
+        if (candidates.length === 0) candidates = teams;
+      }
       errors.push(
         `Could not find a team for goalie(s) ${u.names.join(
           ", "
@@ -799,9 +851,15 @@ function buildTeams(players, coaches, numTeams) {
 
     let candidates = teams.filter((t) => canPlace(t, u) && !violatesAvoid(t, u));
     if (candidates.length === 0) {
-      // relax capacity if truly nothing fits (avoid constraints still respected if possible)
-      candidates = teams.filter((t) => !violatesAvoid(t, u));
-      if (candidates.length === 0) candidates = teams;
+      // relax the equal-size target first, but keep the avoid request and
+      // the absolute 18-skater cap intact if at all possible
+      candidates = teams.filter((t) => withinAbsoluteCaps(t, u) && !violatesAvoid(t, u));
+      if (candidates.length === 0) {
+        // avoid can't be honored alongside the skater cap either — relax
+        // avoid next, still trying to respect the absolute cap
+        candidates = teams.filter((t) => withinAbsoluteCaps(t, u));
+        if (candidates.length === 0) candidates = teams;
+      }
       errors.push(
         `Could not find a team for ${u.names.join(
           ", "
@@ -841,6 +899,7 @@ function buildTeams(players, coaches, numTeams) {
     const defCounts = teams.map((t) => t.defenseCount);
     const highCounts = teams.map((t) => t.highRatedCount);
     const lowCounts = teams.map((t) => t.lowRatedCount);
+    const totalCounts = teams.map((t) => t.goalieCount + t.forwardCount + t.defenseCount);
     const spread = (arr) => Math.max(...arr) - Math.min(...arr);
     let score =
       spread(overallAvgs) * 2 +
@@ -849,7 +908,8 @@ function buildTeams(players, coaches, numTeams) {
       spread(fwdCounts) * 4 +
       spread(defCounts) * 4 +
       spread(highCounts) * 3 +
-      spread(lowCounts) * 3;
+      spread(lowCounts) * 3 +
+      spread(totalCounts) * 12;
     // works for any set of birth years present in the data, not just a fixed pair
     allBirthYears.forEach((y) => {
       const counts = teams.map((t) => t.birthYears[y] || 0);
@@ -885,6 +945,12 @@ function buildTeams(players, coaches, numTeams) {
         if (taGoalieAfter > GOALIE_CAP || tbGoalieAfter > GOALIE_CAP) continue;
         if (taSkaterAfter > SKATER_CAP || tbSkaterAfter > SKATER_CAP) continue;
         if (taGoalieAfter < 0 || tbGoalieAfter < 0) continue;
+        // keep both teams' total roster size within the equal-size target
+        if (
+          taGoalieAfter + taSkaterAfter > effectiveCapFor(ta) ||
+          tbGoalieAfter + tbSkaterAfter > effectiveCapFor(tb)
+        )
+          continue;
         // never let a swap strand a team at 0 goalies if it currently has one
         if ((taGoalieAfter === 0 && ta.goalieCount > 0) || (tbGoalieAfter === 0 && tb.goalieCount > 0))
           continue;
@@ -951,6 +1017,16 @@ function buildTeams(players, coaches, numTeams) {
       );
     }
   });
+  // team sizes should differ by at most 1 (an uneven roster means some teams
+  // get one extra player) — if they differ by more, something forced it
+  const teamTotals = teams.map((t) => t.goalieCount + t.forwardCount + t.defenseCount);
+  const teamSizeSpread = Math.max(...teamTotals) - Math.min(...teamTotals);
+  if (teamSizeSpread > 1) {
+    const sizesSummary = teams.map((t, i) => `Team ${i + 1}: ${teamTotals[i]}`).join(", ");
+    errors.push(
+      `Team sizes ended up more than 1 player apart (${sizesSummary}) instead of the even split expected. This is usually caused by coach's-kids or sibling/avoid groups being too large or concentrated to distribute evenly — review those requirements.`
+    );
+  }
 
   // ---- teammate request fulfillment report ----
   // Sibling/Avoid are hard constraints, so any failure there is already a hard
@@ -1421,12 +1497,14 @@ export default function TeamBalancer() {
                 </li>
               </ol>
               <p>
-                After requests are placed, the app balances everything else it can: the number of
-                forwards and defense per team, overall skater rating per team, birth-year split,
-                how many top-rated (4+) and lower-rated (under 2) skaters land on each team, 1–2
-                goalies per team, and making sure no team ends up with exactly one female player
-                (every team has either zero or at least two). The results screen shows exactly
-                which requests couldn't be honored and why, so nothing is a silent trade-off.
+                After requests are placed, the app balances everything else it can: keeping every
+                team's total roster size equal (within 1 player, if the roster doesn't divide
+                evenly), the number of forwards and defense per team, overall skater rating per
+                team, birth-year split, how many top-rated (4+) and lower-rated (under 2) skaters
+                land on each team, 1–2 goalies per team, and making sure no team ends up with
+                exactly one female player (every team has either zero or at least two). The results
+                screen shows exactly which requests couldn't be honored and why, so nothing is a
+                silent trade-off.
               </p>
             </div>
           </details>

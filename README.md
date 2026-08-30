@@ -172,18 +172,22 @@ Once hard requirements are placed, remaining players are assigned to
 minimize imbalance across several dimensions at once, in this order of
 weight:
 
-1. **Forward and defense counts per team** - kept as close to even as
+1. **Total roster size per team** - every team ends up the same total size
+   (goalies + skaters), within 1 player if the roster doesn't divide evenly
+   across your team count (e.g. 148 players / 8 teams -> four teams of 19,
+   four of 18).
+2. **Forward and defense counts per team** - kept as close to even as
    roster caps and hard requirements allow.
-2. **Top-rated (4+) and bottom-rated (under 2) skater counts per team** -
+3. **Top-rated (4+) and bottom-rated (under 2) skater counts per team** -
    spread out instead of clustering on one team.
-3. **Overall / forward / defense average rating per team** - kept close to
+4. **Overall / forward / defense average rating per team** - kept close to
    the roster-wide average.
-4. **Birth-year split per team** - works with whatever birth years are
+5. **Birth-year split per team** - works with whatever birth years are
    actually in your data (a 2014/2015 division, a 2016/2017 division, or
    any other set), not a fixed pair.
-5. **Goalies** - every team gets 1-2, assigned before skaters so no team
+6. **Goalies** - every team gets 1-2, assigned before skaters so no team
    is left with zero.
-6. **Female pairing rule** - no team ends up with exactly one female
+7. **Female pairing rule** - no team ends up with exactly one female
    player; every team has either zero or at least two.
 
 Placement runs in two passes: an initial greedy assignment (biggest,
@@ -194,14 +198,16 @@ further improving swap is found.
 
 Because siblings, coach's kids, and avoid pairs are hard constraints, a
 particularly large sibling group or an unlucky combination of requests can
-still leave one team slightly less balanced than the others. The app
-always shows you the resulting stats per team so any trade-off is visible,
-not hidden.
+still leave one team slightly less balanced than the others - including,
+in rare cases, a team size more than 1 player off from the rest. The app
+always shows you the resulting stats per team, and flags an explicit error
+if team sizes end up unevenly split, so any trade-off is visible, not
+hidden.
 
 ### Roster caps
 
 - **Goalies:** 1-2 per team.
-- **Skaters (forward + defense):** maximum 17 per team.
+- **Skaters (forward + defense):** maximum 18 per team.
 
 If your total goalie or skater count can't fit those caps for the number
 of teams you've set, the app flags it as an error before placing anyone.
