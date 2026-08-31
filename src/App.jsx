@@ -18,6 +18,18 @@ function normalizePosition(raw) {
   return null;
 }
 
+// Same idea for coach Role — recognizes common variants and returns null for
+// anything unrecognized so it can be flagged instead of silently
+// mis-categorized (e.g. a Manager row quietly treated as a floating
+// Assistant, which would wrongly count it against the 5-coach cap).
+function normalizeRole(raw) {
+  const k = key(raw);
+  if (["head", "head coach", "hc"].includes(k)) return "Head";
+  if (["assistant", "assistant coach", "asst", "asst coach", "a"].includes(k)) return "Assistant";
+  if (["manager", "team manager", "mgr"].includes(k)) return "Manager";
+  return null;
+}
+
 function parseCSV(text) {
   const res = Papa.parse(text, { header: true, skipEmptyLines: true });
   return res.data.map((row) => {
@@ -30,6 +42,12 @@ function parseCSV(text) {
 function loadPlayers(text) {
   return parseCSV(text).map((r, i) => {
     const normalizedPosition = normalizePosition(r["Position"]);
+    const teammateRequests = [1, 2, 3]
+      .map((n) => ({
+        request: r[`Teammate Request ${n}`],
+        reason: r[`Teammate Reason ${n}`],
+      }))
+      .filter((tr) => tr.request);
     return {
       idx: i,
       name: r["Name"],
@@ -41,27 +59,31 @@ function loadPlayers(text) {
       // was in the file
       position: normalizedPosition || r["Position"],
       positionRecognized: !!normalizedPosition,
-      teammateRequest: r["Teammate Request"],
-      teammateReason: r["Teammate Reason"],
+      // up to 3 teammate requests, each with its own reason
+      teammateRequests,
     };
   });
 }
 
 function loadCoaches(text) {
-  return parseCSV(text).map((r, i) => ({
-    idx: i,
-    name: r["Coach"],
-    role: r["Role"],
-    requests: [
-      r["Coach Request 1"],
-      r["Coach Request 2"],
-      r["Coach Request 3"],
-    ].filter((x) => x),
-    childNames: (r["Childs Names"] || "")
-      .split(";")
-      .map((s) => norm(s))
-      .filter((x) => x),
-  }));
+  return parseCSV(text).map((r, i) => {
+    const normalizedRole = normalizeRole(r["Role"]);
+    return {
+      idx: i,
+      name: r["Coach"],
+      role: normalizedRole || r["Role"],
+      roleRecognized: !!normalizedRole,
+      requests: [
+        r["Coach Request 1"],
+        r["Coach Request 2"],
+        r["Coach Request 3"],
+      ].filter((x) => x),
+      childNames: (r["Childs Names"] || "")
+        .split(";")
+        .map((s) => norm(s))
+        .filter((x) => x),
+    };
+  });
 }
 
 // Union-Find
@@ -167,8 +189,7 @@ function generateMockData(numPlayers) {
       rating: 2 + Math.floor(Math.random() * 4),
       gender,
       position: "Goalie",
-      teammateRequest: "",
-      teammateReason: "",
+      teammateRequests: [],
     });
   }
 
@@ -198,17 +219,21 @@ function generateMockData(numPlayers) {
       rating: 1 + Math.floor(Math.random() * 5),
       gender: genders[i],
       position: positions[i],
-      teammateRequest: "",
-      teammateReason: "",
+      teammateRequests: [],
     });
   }
 
-  // teammate requests, scaled relative to the original 98-skater baseline
+  // teammate requests, scaled relative to the original 98-skater baseline.
+  // Each player can have up to 3 requests, each with its own reason — most
+  // of the pairs below give a player a single request, with a smaller
+  // supplementary pass adding a second (rarely third) request to some
+  // already-requested players to reflect that.
   const scale = skaterCount / 98;
   const nSibling = Math.max(0, Math.round(6 * scale));
   const nAvoid = Math.max(0, Math.round(4 * scale));
   const nTransport = Math.max(0, Math.round(8 * scale));
   const nFriend = Math.max(0, Math.round(12 * scale));
+  const nExtra = Math.max(0, Math.round(5 * scale)); // supplementary 2nd/3rd requests
 
   const pool = [...skaters];
   for (let i = pool.length - 1; i > 0; i--) {
@@ -216,22 +241,30 @@ function generateMockData(numPlayers) {
     [pool[i], pool[j]] = [pool[j], pool[i]];
   }
   let pIdx = 0;
-  const setRequest = (a, b, reasonA, reasonB) => {
-    a.teammateRequest = b.name;
-    a.teammateReason = reasonA;
-    if (reasonB) {
-      b.teammateRequest = a.name;
-      b.teammateReason = reasonB;
+  const addRequest = (a, b, reasonA, reasonB) => {
+    if (a.teammateRequests.length < 3) a.teammateRequests.push({ request: b.name, reason: reasonA });
+    if (reasonB && b.teammateRequests.length < 3) {
+      b.teammateRequests.push({ request: a.name, reason: reasonB });
     }
   };
   for (let i = 0; i < nSibling && pIdx + 1 < pool.length; i++, pIdx += 2)
-    setRequest(pool[pIdx], pool[pIdx + 1], "Sibling", "Sibling");
+    addRequest(pool[pIdx], pool[pIdx + 1], "Sibling", "Sibling");
   for (let i = 0; i < nAvoid && pIdx + 1 < pool.length; i++, pIdx += 2)
-    setRequest(pool[pIdx], pool[pIdx + 1], "Avoid", "Avoid");
+    addRequest(pool[pIdx], pool[pIdx + 1], "Avoid", "Avoid");
   for (let i = 0; i < nTransport && pIdx + 1 < pool.length; i++, pIdx += 2)
-    setRequest(pool[pIdx], pool[pIdx + 1], "Transportation");
+    addRequest(pool[pIdx], pool[pIdx + 1], "Transportation");
   for (let i = 0; i < nFriend && pIdx + 1 < pool.length; i++, pIdx += 2)
-    setRequest(pool[pIdx], pool[pIdx + 1], "Friend");
+    addRequest(pool[pIdx], pool[pIdx + 1], "Friend");
+  // supplementary pass: give some players (with room left) an extra request
+  const extraReasons = ["Friend", "Transportation"];
+  for (let i = 0; i < nExtra && pIdx + 1 < pool.length; i++, pIdx += 2) {
+    const a = pool[pIdx];
+    const b = pool[pIdx + 1];
+    if (a.teammateRequests.length < 3 && b.name !== a.name) {
+      const reason = extraReasons[Math.floor(Math.random() * extraReasons.length)];
+      a.teammateRequests.push({ request: b.name, reason });
+    }
+  }
 
   const allPlayers = [...players, ...skaters];
   for (let i = allPlayers.length - 1; i > 0; i--) {
@@ -240,12 +273,20 @@ function generateMockData(numPlayers) {
   }
 
   const playersCSV = [
-    "Name,Year of Birth,Rating,Gender,Position,Teammate Request,Teammate Reason",
-    ...allPlayers.map((p) =>
-      [p.name, p.birthYear, p.rating, p.gender, p.position, p.teammateRequest, p.teammateReason]
+    "Name,Year of Birth,Rating,Gender,Position,Teammate Request 1,Teammate Reason 1,Teammate Request 2,Teammate Reason 2,Teammate Request 3,Teammate Reason 3",
+    ...allPlayers.map((p) => {
+      const reqs = [0, 1, 2].map((i) => p.teammateRequests[i]);
+      return [
+        p.name,
+        p.birthYear,
+        p.rating,
+        p.gender,
+        p.position,
+        ...reqs.flatMap((tr) => [tr ? tr.request : "", tr ? tr.reason : ""]),
+      ]
         .map((v) => `"${String(v).replace(/"/g, '""')}"`)
-        .join(",")
-    ),
+        .join(",");
+    }),
   ].join("\n");
 
   // coaches: one Head row per team, plus a handful of Assistant rows. Each
@@ -287,6 +328,14 @@ function generateMockData(numPlayers) {
     const floatName = makeName(Math.random() < 0.5 ? "Male" : "Female");
     coachRows.push(csvRow([floatName, "Assistant", "", "", "", ""]));
   }
+  // roughly half the teams get a manager — managers don't count against the
+  // 5-coach (head + assistant) cap, so they're generated separately
+  for (let i = 0; i < teamCount; i++) {
+    if (Math.random() < 0.5) {
+      const mName = makeName(Math.random() < 0.5 ? "Male" : "Female");
+      coachRows.push(csvRow([mName, "Manager", headNames[i], "", "", ""]));
+    }
+  }
   const coachesCSV = coachRows.join("\n");
 
   return {
@@ -324,8 +373,25 @@ function buildTeams(players, coaches, numTeams) {
     );
   }
 
+  // ---- role validation ----
+  // Same idea as position validation above — a Role that doesn't resolve to
+  // Head/Assistant/Manager would otherwise silently fall through as neither
+  // counted toward the head-coach total nor the 5-coach cap.
+  const unrecognizedRoles = coaches.filter((c) => !c.roleRecognized);
+  if (unrecognizedRoles.length > 0) {
+    const examples = [...new Set(unrecognizedRoles.map((c) => `"${c.role}"`))].slice(0, 5);
+    errors.push(
+      `${unrecognizedRoles.length} coach${unrecognizedRoles.length > 1 ? "es have" : " has"} a Role value that isn't recognized as Head, Assistant, or Manager (${examples.join(
+        ", "
+      )}${unrecognizedRoles.length > 5 ? ", ..." : ""}): ${unrecognizedRoles
+        .map((c) => c.name)
+        .join(", ")}. Fix the Role column and re-run.`
+    );
+  }
+
   const headCoaches = coaches.filter((c) => key(c.role) === "head");
   const isHead = (c) => key(c.role) === "head";
+  const isManager = (c) => key(c.role) === "manager";
 
   if (headCoaches.length !== numTeams) {
     errors.push(
@@ -413,8 +479,14 @@ function buildTeams(players, coaches, numTeams) {
   });
 
   // assign each group to a team: anchored to its head coach if it has one,
-  // otherwise held aside as "floating" (assistants who never connected to a
-  // head coach through a request) and distributed evenly further down
+  // otherwise held aside as "floating" (assistants/managers who never
+  // connected to a head coach through a request) and distributed evenly
+  // further down. Teams are capped at 5 coaches counting head + assistants
+  // only — managers don't count against that cap.
+  const COACH_ASSISTANT_CAP = 5;
+  const headPlusAssistantCount = Array(teamCount).fill(1); // 1 for each team's head
+  const totalCoachCountPerTeam = Array(teamCount).fill(1); // includes managers, used for floating balance only
+
   const coachFinalTeam = {}; // coach.idx -> team index
   const floatingGroups = [];
   Object.values(coachGroups).forEach((group) => {
@@ -423,32 +495,53 @@ function buildTeams(players, coaches, numTeams) {
       floatingGroups.push(group);
     } else {
       const ti = headTeamIdx[heads[0].idx];
+      const nonHeadAssistants = group.filter((c) => !isHead(c) && !isManager(c)).length;
+      const nonHeadManagers = group.filter((c) => !isHead(c) && isManager(c)).length;
+      if (headPlusAssistantCount[ti] + nonHeadAssistants > COACH_ASSISTANT_CAP) {
+        errors.push(
+          `Team ${ti + 1} (${teamHeadName[ti]}) exceeds the 5-coach cap (head + assistants — managers don't count against it) because of coaching-together requests among ${group
+            .map((c) => c.name)
+            .join(", ")}. Placed anyway — review manually.`
+        );
+      }
       group.forEach((c) => {
         coachFinalTeam[c.idx] = ti;
       });
+      headPlusAssistantCount[ti] += nonHeadAssistants;
+      totalCoachCountPerTeam[ti] += nonHeadAssistants + nonHeadManagers;
     }
   });
 
-  // distribute floating assistant groups round-robin onto whichever team
-  // currently has the fewest assistants, so they don't all pile onto one team
-  if (teamCount > 0) {
-    const assistantCountPerTeam = Array(teamCount).fill(0);
-    Object.entries(coachFinalTeam).forEach(([idx, ti]) => {
-      if (!isHead(coaches[idx])) assistantCountPerTeam[ti]++;
-    });
-    floatingGroups
-      .sort((a, b) => b.length - a.length)
-      .forEach((group) => {
-        let best = 0;
-        for (let i = 1; i < teamCount; i++) {
-          if (assistantCountPerTeam[i] < assistantCountPerTeam[best]) best = i;
-        }
-        group.forEach((c) => {
-          coachFinalTeam[c.idx] = best;
-        });
-        assistantCountPerTeam[best] += group.length;
+  // distribute floating groups (no request connecting them to any head) —
+  // prefer a team with room under the 5-coach cap for any assistants in the
+  // group (managers in the group never count against that cap), then break
+  // ties by whichever team has the fewest coaches overall so far.
+  floatingGroups
+    .sort((a, b) => b.length - a.length)
+    .forEach((group) => {
+      const assistantsInGroup = group.filter((c) => !isManager(c)).length;
+      let candidateIdxs = [];
+      for (let i = 0; i < teamCount; i++) {
+        if (headPlusAssistantCount[i] + assistantsInGroup <= COACH_ASSISTANT_CAP) candidateIdxs.push(i);
+      }
+      if (candidateIdxs.length === 0) {
+        candidateIdxs = Array.from({ length: teamCount }, (_, i) => i);
+        errors.push(
+          `Could not find a team with room under the 5-coach cap for ${group
+            .map((c) => c.name)
+            .join(", ")}. Placed on the least-bad team — review manually.`
+        );
+      }
+      let best = candidateIdxs[0];
+      candidateIdxs.forEach((i) => {
+        if (totalCoachCountPerTeam[i] < totalCoachCountPerTeam[best]) best = i;
       });
-  }
+      group.forEach((c) => {
+        coachFinalTeam[c.idx] = best;
+      });
+      headPlusAssistantCount[best] += assistantsInGroup;
+      totalCoachCountPerTeam[best] += group.length;
+    });
 
   // ---- player index ----
   const byName = {};
@@ -459,21 +552,23 @@ function buildTeams(players, coaches, numTeams) {
   // ---- union-find for siblings ----
   const uf = new UF(players.length);
   players.forEach((p) => {
-    if (key(p.teammateReason) === "sibling" && p.teammateRequest) {
-      const target = byName[key(p.teammateRequest)];
+    p.teammateRequests.forEach((tr) => {
+      if (key(tr.reason) !== "sibling") return;
+      const target = byName[key(tr.request)];
       if (target) uf.union(p.idx, target.idx);
       else
         warnings.push(
-          `${p.name}'s sibling request "${p.teammateRequest}" was not found in the player list.`
+          `${p.name}'s sibling request "${tr.request}" was not found in the player list.`
         );
-    }
+    });
   });
 
   // ---- avoid pairs ----
   const avoidPairs = [];
   players.forEach((p) => {
-    if (key(p.teammateReason) === "avoid" && p.teammateRequest) {
-      const target = byName[key(p.teammateRequest)];
+    p.teammateRequests.forEach((tr) => {
+      if (key(tr.reason) !== "avoid") return;
+      const target = byName[key(tr.request)];
       if (target) {
         if (uf.find(p.idx) === uf.find(target.idx)) {
           errors.push(
@@ -484,10 +579,10 @@ function buildTeams(players, coaches, numTeams) {
         }
       } else {
         warnings.push(
-          `${p.name}'s avoid request "${p.teammateRequest}" was not found in the player list.`
+          `${p.name}'s avoid request "${tr.request}" was not found in the player list.`
         );
       }
-    }
+    });
   });
 
   // ---- build units from union-find groups ----
@@ -604,11 +699,21 @@ function buildTeams(players, coaches, numTeams) {
   const baseTeamSize = Math.floor(totalRosterCount / teamCount);
   const maxTeamSize = Math.ceil(totalRosterCount / teamCount); // baseTeamSize, or +1 if there's a remainder
 
+  // Same idea for top-rated (4+) and bottom-rated (under 2) skaters: an equal
+  // split across teams, ±1 when the count doesn't divide evenly.
+  const totalHighAll = units.reduce((s, u) => s + u.highRatedCount, 0);
+  const totalLowAll = units.reduce((s, u) => s + u.lowRatedCount, 0);
+  const baseHighPerTeam = Math.floor(totalHighAll / teamCount);
+  const maxHighPerTeam = Math.ceil(totalHighAll / teamCount);
+  const baseLowPerTeam = Math.floor(totalLowAll / teamCount);
+  const maxLowPerTeam = Math.ceil(totalLowAll / teamCount);
+
   // ---- initialize team accumulators ----
   const teams = Array.from({ length: teamCount }, (_, i) => ({
     index: i,
     coach: teamHeadName[i],
     assistants: [],
+    managers: [],
     goalieCount: 0,
     goalieRatingSum: 0,
     forwardCount: 0,
@@ -625,13 +730,17 @@ function buildTeams(players, coaches, numTeams) {
   coaches.forEach((c) => {
     if (isHead(c)) return;
     const ti = coachFinalTeam[c.idx];
-    if (teams[ti]) teams[ti].assistants.push(c.name);
+    if (!teams[ti]) return;
+    if (isManager(c)) teams[ti].managers.push(c.name);
+    else teams[ti].assistants.push(c.name);
   });
 
   const GOALIE_CAP = 2;
   const SKATER_CAP = 18;
   // number of teams allowed to have baseTeamSize+1 (the "remainder" players)
   const bonusSlots = totalRosterCount % teamCount;
+  const bonusHighSlots = totalHighAll % teamCount;
+  const bonusLowSlots = totalLowAll % teamCount;
 
   function teamTotal(t) {
     return t.goalieCount + t.forwardCount + t.defenseCount;
@@ -642,13 +751,39 @@ function buildTeams(players, coaches, numTeams) {
   // ceiling, which then starves whichever teams are left, pushing them more
   // than 1 below the rest. So the cap for a given team is dynamic — once
   // `bonusSlots` teams have already claimed the +1 tier, everyone else is
-  // held to the plain baseTeamSize.
+  // held to the plain baseTeamSize. Same pattern for the high/low-rated caps.
   function effectiveCapFor(team) {
     if (bonusSlots === 0) return baseTeamSize;
     if (teamTotal(team) >= maxTeamSize) return maxTeamSize;
     const teamsAtBonusTier = teams.filter((t) => t !== team && teamTotal(t) >= maxTeamSize).length;
     return teamsAtBonusTier >= bonusSlots ? baseTeamSize : maxTeamSize;
   }
+  function effectiveHighCapFor(team) {
+    if (bonusHighSlots === 0) return baseHighPerTeam;
+    if (team.highRatedCount >= maxHighPerTeam) return maxHighPerTeam;
+    const teamsAtBonusTier = teams.filter(
+      (t) => t !== team && t.highRatedCount >= maxHighPerTeam
+    ).length;
+    return teamsAtBonusTier >= bonusHighSlots ? baseHighPerTeam : maxHighPerTeam;
+  }
+  function effectiveLowCapFor(team) {
+    if (bonusLowSlots === 0) return baseLowPerTeam;
+    if (team.lowRatedCount >= maxLowPerTeam) return maxLowPerTeam;
+    const teamsAtBonusTier = teams.filter(
+      (t) => t !== team && t.lowRatedCount >= maxLowPerTeam
+    ).length;
+    return teamsAtBonusTier >= bonusLowSlots ? baseLowPerTeam : maxLowPerTeam;
+  }
+  // NOTE: effectiveHighCapFor/effectiveLowCapFor are deliberately only used
+  // in the swap/local-search phase below, not in canPlace. Enforcing all 3
+  // dynamic caps (size, high, low) as hard blocks during the initial greedy
+  // placement turned out to be fragile — in a tight roster with little
+  // slack, placement could get stuck with nowhere valid to put a unit and
+  // dump a whole run of players onto a single team instead of spreading
+  // them out. The swap phase doesn't have that risk (a rejected swap just
+  // tries the next candidate pair), so that's where these are enforced as a
+  // hard filter — the initial placement leans on the cost-weighted target
+  // below instead, then the swap phase pulls it the rest of the way to even.
 
   // just the hard absolute limits (18 skaters, 1-2 goalies) — used as a
   // fallback tier that's still stricter than "anything goes" when the
@@ -676,18 +811,7 @@ function buildTeams(players, coaches, numTeams) {
         (a === unit && team.units.includes(b)) || (b === unit && team.units.includes(a))
     );
   }
-  function placementCost(
-    team,
-    unit,
-    avgOverall,
-    avgFwd,
-    avgDef,
-    idealFwdPerTeam,
-    idealDefPerTeam,
-    idealHighPerTeam,
-    idealLowPerTeam,
-    idealByYear
-  ) {
+  function placementCost(team, unit, avgOverall, avgFwd, avgDef, idealByYear) {
     const newSkaters = team.forwardCount + team.defenseCount + unit.forwardCount + unit.defenseCount;
     const newRating = team.ratingSum + unit.ratingSum;
     const newFwdCount = team.forwardCount + unit.forwardCount;
@@ -701,10 +825,11 @@ function buildTeams(players, coaches, numTeams) {
       Math.abs(overallAvg - avgOverall) * 2 +
       Math.abs(fwdAvg - avgFwd) +
       Math.abs(defAvg - avgDef);
-    // keep the number of forwards and defense per team close to the target —
-    // weighted heavily so count balance wins out over small rating differences
-    cost += Math.abs(newFwdCount - idealFwdPerTeam) * 4;
-    cost += Math.abs(newDefCount - idealDefPerTeam) * 4;
+    // keep the number of forwards and defense per team close to even —
+    // reward whichever team currently has fewer (see the note below on why
+    // "closeness to the average" is the wrong formula for this)
+    if (unit.forwardCount > 0) cost += newFwdCount * 4;
+    if (unit.defenseCount > 0) cost += newDefCount * 4;
     // keep every team's TOTAL roster size (goalies + skaters) as even as
     // possible — weighted above position balance since an equal team size is
     // the top ask here; the hard cap in canPlace already prevents any team
@@ -712,18 +837,27 @@ function buildTeams(players, coaches, numTeams) {
     // rather than letting one team hit the cap early while another lags
     const newTotal =
       team.goalieCount + team.forwardCount + team.defenseCount + unit.goalieCount + unit.forwardCount + unit.defenseCount;
-    cost += Math.abs(newTotal - totalRosterCount / teamCount) * 12;
-    // spread out top-rated (4+) and bottom-rated (<2) skaters instead of letting
-    // them cluster on the same team
+    cost += newTotal * 12;
+    // spread out top-rated (4+) and bottom-rated (<2) skaters instead of
+    // letting them cluster — reward whichever team currently has fewer, not
+    // "closeness to the average". Deviation-from-average is the wrong
+    // formula here: adding to a below-target team keeps shrinking its
+    // deviation, so the same team keeps looking cheapest right up until it
+    // overshoots the target — that's what caused a real clustering bug
+    // during testing (one team with 16 high-rated skaters, another with 0).
+    // Rewarding the lower current count directly avoids that. Only applies
+    // when this unit actually contains a high/low-rated player.
     const newHigh = team.highRatedCount + unit.highRatedCount;
     const newLow = team.lowRatedCount + unit.lowRatedCount;
-    cost += Math.abs(newHigh - idealHighPerTeam) * 3;
-    cost += Math.abs(newLow - idealLowPerTeam) * 3;
-    // keep each birth year's count per team close to its target — works for
-    // any set of birth years present in the data, not just a fixed pair
+    if (unit.highRatedCount > 0) cost += newHigh * 6;
+    if (unit.lowRatedCount > 0) cost += newLow * 6;
+    // keep each birth year's count per team close to even — works for any
+    // set of birth years present in the data, not just a fixed pair
     Object.keys(idealByYear).forEach((y) => {
-      const newYearCount = (team.birthYears[y] || 0) + (unit.birthYears[y] || 0);
-      cost += Math.abs(newYearCount - idealByYear[y]) * 1.5;
+      const unitYearCount = unit.birthYears[y] || 0;
+      if (unitYearCount === 0) return;
+      const newYearCount = (team.birthYears[y] || 0) + unitYearCount;
+      cost += newYearCount * 1.5;
     });
     const newFemale = team.femaleCount + unit.femaleCount;
     if (newFemale === 1) cost += 8; // heavy penalty for stranding a single female
@@ -823,9 +957,8 @@ function buildTeams(players, coaches, numTeams) {
   const idealFwdPerTeam = totalForwardsAll / teamCount;
   const idealDefPerTeam = totalDefenseAll / teamCount;
   // same idea for top-rated (4+) and bottom-rated (<2) skaters, so they get
-  // spread across teams instead of clustering
-  const totalHighAll = units.reduce((s, u) => s + u.highRatedCount, 0);
-  const totalLowAll = units.reduce((s, u) => s + u.lowRatedCount, 0);
+  // spread across teams instead of clustering (totals already computed above
+  // for the hard-cap logic; reused here as fractional cost targets)
   const idealHighPerTeam = totalHighAll / teamCount;
   const idealLowPerTeam = totalLowAll / teamCount;
   // same idea for birth year — works for any years present in the data (not
@@ -869,18 +1002,7 @@ function buildTeams(players, coaches, numTeams) {
     let best = candidates[0];
     let bestCost = Infinity;
     candidates.forEach((t) => {
-      const c = placementCost(
-        t,
-        u,
-        avgOverall,
-        avgFwd,
-        avgDef,
-        idealFwdPerTeam,
-        idealDefPerTeam,
-        idealHighPerTeam,
-        idealLowPerTeam,
-        idealByYear
-      );
+      const c = placementCost(t, u, avgOverall, avgFwd, avgDef, idealByYear);
       if (c < bestCost) {
         bestCost = c;
         best = t;
@@ -907,8 +1029,8 @@ function buildTeams(players, coaches, numTeams) {
       spread(defAvgs) +
       spread(fwdCounts) * 4 +
       spread(defCounts) * 4 +
-      spread(highCounts) * 3 +
-      spread(lowCounts) * 3 +
+      spread(highCounts) * 6 +
+      spread(lowCounts) * 6 +
       spread(totalCounts) * 12;
     // works for any set of birth years present in the data, not just a fixed pair
     allBirthYears.forEach((y) => {
@@ -925,7 +1047,7 @@ function buildTeams(players, coaches, numTeams) {
   const movableUnits = units.filter((u) => u.lockedTeam === null);
   let improved = true;
   let passes = 0;
-  while (improved && passes < 4) {
+  while (improved && passes < 8) {
     improved = false;
     passes++;
     for (let i = 0; i < movableUnits.length; i++) {
@@ -951,6 +1073,14 @@ function buildTeams(players, coaches, numTeams) {
           tbGoalieAfter + tbSkaterAfter > effectiveCapFor(tb)
         )
           continue;
+        // and the 4+/under-2 rated skater counts — enforced here rather than
+        // during initial placement (see the note above effectiveHighCapFor)
+        const taHighAfter = ta.highRatedCount - ua.highRatedCount + ub.highRatedCount;
+        const tbHighAfter = tb.highRatedCount - ub.highRatedCount + ua.highRatedCount;
+        const taLowAfter = ta.lowRatedCount - ua.lowRatedCount + ub.lowRatedCount;
+        const tbLowAfter = tb.lowRatedCount - ub.lowRatedCount + ua.lowRatedCount;
+        if (taHighAfter > effectiveHighCapFor(ta) || tbHighAfter > effectiveHighCapFor(tb)) continue;
+        if (taLowAfter > effectiveLowCapFor(ta) || tbLowAfter > effectiveLowCapFor(tb)) continue;
         // never let a swap strand a team at 0 goalies if it currently has one
         if ((taGoalieAfter === 0 && ta.goalieCount > 0) || (tbGoalieAfter === 0 && tb.goalieCount > 0))
           continue;
@@ -1027,6 +1157,23 @@ function buildTeams(players, coaches, numTeams) {
       `Team sizes ended up more than 1 player apart (${sizesSummary}) instead of the even split expected. This is usually caused by coach's-kids or sibling/avoid groups being too large or concentrated to distribute evenly — review those requirements.`
     );
   }
+  // same ±1 check for the 4+ and under-2 rated skater counts
+  const highTotals = teams.map((t) => t.highRatedCount);
+  const highSpread = Math.max(...highTotals) - Math.min(...highTotals);
+  if (highSpread > 1) {
+    const summary = teams.map((t, i) => `Team ${i + 1}: ${highTotals[i]}`).join(", ");
+    errors.push(
+      `The number of 4+ rated skaters ended up more than 1 apart between teams (${summary}) instead of the even split expected. This is usually caused by a sibling/avoid/coach's-kid group concentrating several highly-rated players on one team.`
+    );
+  }
+  const lowTotals = teams.map((t) => t.lowRatedCount);
+  const lowSpread = Math.max(...lowTotals) - Math.min(...lowTotals);
+  if (lowSpread > 1) {
+    const summary = teams.map((t, i) => `Team ${i + 1}: ${lowTotals[i]}`).join(", ");
+    errors.push(
+      `The number of under-2 rated skaters ended up more than 1 apart between teams (${summary}) instead of the even split expected. This is usually caused by a sibling/avoid/coach's-kid group concentrating several lower-rated players on one team.`
+    );
+  }
 
   // ---- teammate request fulfillment report ----
   // Sibling/Avoid are hard constraints, so any failure there is already a hard
@@ -1044,25 +1191,26 @@ function buildTeams(players, coaches, numTeams) {
   const fulfilledRequests = [];
   const unfulfilledRequests = [];
   players.forEach((p) => {
-    const reason = key(p.teammateReason);
-    const isAvoid = reason === "avoid";
-    if ((reason === "sibling" || reason === "avoid" || reason === "transportation" || reason === "friend") && p.teammateRequest) {
-      const target = byName[key(p.teammateRequest)];
+    p.teammateRequests.forEach((tr) => {
+      const reason = key(tr.reason);
+      const isAvoid = reason === "avoid";
+      if (!["sibling", "avoid", "transportation", "friend"].includes(reason)) return;
+      const target = byName[key(tr.request)];
       if (!target) return; // already flagged in warnings as a name-not-found issue
       const sameTeam = playerTeamIndex[p.idx] === playerTeamIndex[target.idx];
       // for Avoid, "fulfilled" means they were kept APART, not together
       const honored = isAvoid ? !sameTeam : sameTeam;
-      p.requestFulfilled = honored;
+      tr.fulfilled = honored;
       const entry = {
         name: p.name,
-        request: p.teammateRequest,
-        reason: p.teammateReason,
+        request: tr.request,
+        reason: tr.reason,
         playerTeam: playerTeamIndex[p.idx],
         targetTeam: playerTeamIndex[target.idx],
       };
       if (honored) fulfilledRequests.push(entry);
       else unfulfilledRequests.push(entry);
-    }
+    });
   });
 
   return { teams, errors, warnings, unplaced, fulfilledRequests, unfulfilledRequests };
@@ -1086,34 +1234,44 @@ function exportCSV(teams) {
       "Team",
       "Coach",
       "Assistants",
+      "Managers",
       "Name",
       "Position",
       "Year of Birth",
       "Rating",
       "Gender",
       "Coach's Child",
-      "Teammate Request",
-      "Teammate Reason",
-      "Teammate Request Fulfilled",
+      "Teammate Request 1",
+      "Teammate Reason 1",
+      "Teammate Request 1 Fulfilled",
+      "Teammate Request 2",
+      "Teammate Reason 2",
+      "Teammate Request 2 Fulfilled",
+      "Teammate Request 3",
+      "Teammate Reason 3",
+      "Teammate Request 3 Fulfilled",
     ],
   ];
   teams.forEach((t) => {
     t.units.forEach((u) => {
       u.members.forEach((m) => {
-        const hasRequest = !!m.teammateRequest;
+        const reqs = [0, 1, 2].map((i) => m.teammateRequests[i]);
         rows.push([
           t.index + 1,
           t.coach,
           t.assistants.join(" / "),
+          t.managers.join(" / "),
           m.name,
           m.position,
           m.birthYear,
           m.rating,
           m.gender,
           m.isCoachChild ? "Yes" : "",
-          m.teammateRequest || "",
-          m.teammateReason || "",
-          hasRequest ? (m.requestFulfilled ? "Yes" : "No") : "",
+          ...reqs.flatMap((tr) => [
+            tr ? tr.request : "",
+            tr ? tr.reason : "",
+            tr ? (tr.fulfilled ? "Yes" : "No") : "",
+          ]),
         ]);
       });
     });
@@ -1472,28 +1630,32 @@ export default function TeamBalancer() {
               </p>
               <ol className="priorityList">
                 <li>
-                  <strong>Coaches who want to coach together</strong> — any coach (head or
-                  assistant) can list up to 3 other coaches they want to work with. They're grouped
-                  onto the same team whenever possible. Groups anchor to whichever head coach is in
-                  them; a request that would combine two different head coaches' teams can't be
-                  honored and is reported as an error instead. Assistants with no successful
-                  request are spread evenly across teams.
+                  <strong>Coaches who want to coach together</strong> — any Head or Assistant coach
+                  can list up to 3 other coaches they want to work with (Managers can too). They're
+                  grouped onto the same team whenever possible. Groups anchor to whichever head
+                  coach is in them; a request that would combine two different head coaches' teams
+                  can't be honored and is reported as an error instead. Teams are capped at 5 Head +
+                  Assistant coaches — Managers don't count against that cap, so a team can have its
+                  5 Head/Assistants plus a Manager on top. If honoring a coaching-together request
+                  would push a team over the 5-coach cap, it's still honored (this is the top
+                  priority) and flagged as an error so you can review it. Coaches with no successful
+                  request, or no request at all, are spread evenly across teams.
                 </li>
                 <li>
-                  <strong>Sibling requests</strong> (Teammate Reason = Sibling) — always kept
-                  together. A coach's own listed children are treated the same way, automatically
-                  locked to whichever team that coach ends up on.
+                  <strong>Sibling requests</strong> — always kept together. Each player can list up
+                  to 3 teammate requests, each with its own reason (Sibling, Avoid, Transportation,
+                  or Friend). A coach's own listed children are treated the same way as a sibling
+                  request, automatically locked to whichever team that coach ends up on.
                 </li>
                 <li>
-                  <strong>Avoid requests</strong> (Teammate Reason = Avoid) — always kept apart.
+                  <strong>Avoid requests</strong> — always kept apart.
                 </li>
                 <li>
-                  <strong>Transportation requests</strong> (Teammate Reason = Transportation) —
-                  kept together when it doesn't cost too much balance.
+                  <strong>Transportation requests</strong> — kept together when it doesn't cost too
+                  much balance.
                 </li>
                 <li>
-                  <strong>Friend requests</strong> (Teammate Reason = Friend) — same as
-                  Transportation, lowest priority.
+                  <strong>Friend requests</strong> — same as Transportation, lowest priority.
                 </li>
               </ol>
               <p>
@@ -1515,10 +1677,12 @@ export default function TeamBalancer() {
           <p className="sub">
             Players CSV needs: Name, Year of Birth, Rating, Gender, Position (Goalie / Forward /
             Defense — "Defence", "Def", "Fwd" and single-letter abbreviations are also recognized),
-            Teammate Request, Teammate Reason. Coaches CSV needs: Coach, Role (Head or
-            Assistant — one row per coach, head or assistant), Coach Request 1–3 (up to 3 other
-            coaches this person wants to coach with), Childs Names. Coach Request and Childs Names
-            can be left blank.
+            and up to 3 teammate requests as pairs of columns: Teammate Request 1, Teammate Reason
+            1, Teammate Request 2, Teammate Reason 2, Teammate Request 3, Teammate Reason 3 (all
+            optional). Coaches CSV needs: Coach, Role (Head, Assistant, or Manager — one row per
+            coach), Coach Request 1–3 (up to 3 other coaches this person wants to coach with),
+            Childs Names. Coach Request and Childs Names can be left blank. Teams are capped at 5
+            Head + Assistant coaches total — Managers don't count against that cap.
           </p>
 
           <div className="sampleBox">
@@ -1684,6 +1848,9 @@ export default function TeamBalancer() {
                       <div className="teamCard-coach">{t.coach}</div>
                       {t.assistants.length > 0 && (
                         <div className="teamCard-assist">Asst: {t.assistants.join(", ")}</div>
+                      )}
+                      {t.managers.length > 0 && (
+                        <div className="teamCard-assist">Manager: {t.managers.join(", ")}</div>
                       )}
                     </div>
                     <div className="teamCard-body">
