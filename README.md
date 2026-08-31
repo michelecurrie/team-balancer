@@ -90,24 +90,46 @@ automatically.
 | `Rating` | Yes | `1`-`5`, decimals are fine (e.g. `3.5`). Drives strength balancing and the 4+/under-2 spread. |
 | `Gender` | Yes | `Male` or `Female`. Used for the female-pairing rule. |
 | `Position` | Yes | `Goalie`, `Forward`, or `Defense`. Common variants are also recognized (case-insensitive): `Defence`, `Def`, `D`, `Fwd`, `F`, `Goaltender`, `Goalkeeper`, `G`. Anything else is flagged as an error rather than silently ignored — an unrecognized position previously meant that player was invisible to position balancing and the roster cap, which was a real bug fixed in this version. |
-| `Teammate Request` | No | Name of another player, exactly matching their `Name` field. |
-| `Teammate Reason` | No | One of `Sibling`, `Avoid`, `Transportation`, `Friend`. Required if `Teammate Request` is set. |
+| `Teammate Request 1` / `2` / `3` | No | Up to 3 requests, each naming another player exactly matching their `Name` field. |
+| `Teammate Reason 1` / `2` / `3` | No | One of `Sibling`, `Avoid`, `Transportation`, `Friend` — required for whichever request number it pairs with (e.g. `Teammate Reason 2` goes with `Teammate Request 2`). |
 
 ### Coaches CSV
 
-One row per coach — every head coach **and** every assistant coach goes in
-this same file, not just heads.
+One row per coach — every head coach, assistant coach, **and** manager goes
+in this same file.
 
 | Column | Required | Notes |
 |---|---|---|
 | `Coach` | Yes | The coach's name. |
-| `Role` | Yes | `Head` or `Assistant`. The number of `Head` rows must equal the number of teams you set — each team is anchored to one head coach. |
-| `Coach Request 1` / `2` / `3` | No | Up to 3 other coaches (head or assistant, by name) this person wants to coach with. Not a final assignment — the app resolves these into groups (see [Priority order](#priority-order) below). |
+| `Role` | Yes | `Head`, `Assistant`, or `Manager`. The number of `Head` rows must equal the number of teams you set — each team is anchored to one head coach. Managers are tracked separately and don't count toward the 5-coach cap below. |
+| `Coach Request 1` / `2` / `3` | No | Up to 3 other coaches (any role, by name) this person wants to coach with. Not a final assignment — the app resolves these into groups (see [Priority order](#priority-order) below). |
 | `Childs Names` | No | Semicolon-separated if more than one (`Jane Doe; John Doe`). Leave blank if this coach has no kids on the roster. Matched players are automatically locked to wherever *this coach* ends up — an assistant's child follows the assistant's resolved team, not the team they happened to be listed near in the CSV. |
 
 The number of `Head`-role rows must equal the number of teams you set in
-the app. Assistant rows are additional — there's no fixed number of
-assistants per team.
+the app. **Each team is capped at 5 coaches counting Head + Assistant only**
+— Managers are unlimited and don't count against that cap, so a team can
+have its 5 Head/Assistants plus one or more Managers. If a coaching-together
+request would push a team's Head+Assistant count over 5, it's still honored
+(coach-pairing is the top priority) and flagged as an error so you know to
+review it.
+
+### Starting from scratch (blank templates)
+
+If you don't have a spreadsheet ready yet, the app has a "New here? Start
+with a blank template" box above the upload step with **Download blank
+players template** / **Download blank coaches template** buttons. Each
+template has the correct headers plus a few rows marked `EXAMPLE` showing
+the format in use, including how a teammate/coaching request references
+another row by exact name. Delete the example rows, add your own people,
+and save as CSV before uploading. No spreadsheet experience required — a
+free Google Sheet works fine:
+
+- Google Sheets: **File → Download → Comma Separated Values (.csv)**
+- Excel: **File → Save As**, then choose **CSV** as the file type
+
+The most common mistake is a typo in a request name — it has to match the
+`Name` (or `Coach`) column exactly, including capitalization, or the app
+won't find who it's referring to.
 
 ### Sample data
 
@@ -117,15 +139,15 @@ or as a formatting reference. In the "Sample data" box:
 
 1. Enter how many players you want (20–200).
 2. Click **"Generate sample data"** — this creates a full players CSV and a
-   matching coaches CSV (head and assistant coaches, some with coaching
-   requests, some with children on the roster), with a realistic mix of
-   positions, ratings, genders, and Sibling/Avoid/Transportation/Friend
-   requests scaled to the roster size.
+   matching coaches CSV (head, assistant, and some manager rows, a mix of
+   coaching-together requests, and some players with 2-3 teammate
+   requests), with a realistic mix of positions, ratings, genders, and
+   Sibling/Avoid/Transportation/Friend requests scaled to the roster size.
 3. Click **"Load into app"** to use it immediately, or download either CSV.
 
 The team count is chosen automatically based on how many players you
 enter — it always picks a number of teams that fits within the app's own
-roster caps (max 17 skaters and 1–2 goalies per team), so a generated
+roster caps (max 18 skaters and 1–2 goalies per team), so a generated
 roster will never be too large to place. Birth years in generated data are
 illustrative (the two most recent youth-hockey birth years) — swap in
 whatever years your division actually uses; the app balances on whatever
@@ -140,31 +162,38 @@ it finds in the `Year of Birth` column, not a fixed pair (see
 
 Requests are honored in this order. The first three are **hard
 requirements** — never broken to improve balance. If they can't all be
-satisfied at once (for example, a sibling pair that would need to span two
-different coaches' locked teams), the app resolves it as best it can and
-reports the conflict as an error rather than failing silently. The last
-two are **best effort** — honored whenever possible, sacrificed first when
-they'd force a team badly out of balance.
+satisfied at once, the app resolves it as best it can and reports the
+conflict as an error rather than failing silently. The last two are
+**best effort** — honored whenever possible, sacrificed first when they'd
+force a team badly out of balance.
 
-1. **Coaches who want to coach together** - any coach, head or assistant,
-   can list up to 3 other coaches (by name) they want to work with. These
-   are requests, not final assignments: the app groups requested coaches
-   onto the same team wherever that's structurally possible. Each group
-   anchors to whichever head coach is in it. A request that would require
-   combining two different head coaches' teams into one can't be honored -
-   that's reported as an error rather than silently dropped or arbitrarily
-   picked. Assistants with no request, or whose request didn't resolve,
-   are spread evenly across teams so no team gets stuck with zero help.
-2. **Sibling requests** (`Teammate Reason = Sibling`) - always kept
-   together. A coach's own listed children are treated identically -
-   automatically locked to wherever that coach's own coaching-request
-   resolution placed them, whether or not the child also has a `Sibling`
-   request on file.
-3. **Avoid requests** (`Teammate Reason = Avoid`) - always kept apart.
-4. **Transportation requests** (`Teammate Reason = Transportation`) - kept
-   together when it doesn't come at too much cost to balance.
-5. **Friend requests** (`Teammate Reason = Friend`) - same as
-   Transportation, lowest priority.
+1. **Coaches who want to coach together** — any coach (Head, Assistant, or
+   Manager) can list up to 3 others they want to work with. These are
+   requests, not final assignments: the app groups them onto the same team
+   wherever that's structurally possible, anchored to whichever head coach
+   is in the group.
+   - Each team is capped at **5 coaches counting Head + Assistant only** —
+     Managers don't count against that cap.
+   - If honoring a request would push a team's Head+Assistant count over
+     5, it's still honored (this is the top priority) and flagged as an
+     error so you can review it.
+   - A request that would require merging two different head coaches'
+     teams into one can't be honored at all — that's also flagged as an
+     error rather than silently dropped or arbitrarily picked.
+   - Coaches with no request, or whose request didn't resolve, are spread
+     evenly across teams so no team gets stuck with zero help.
+2. **Sibling requests** — always kept together. A coach's own listed
+   children are treated identically — automatically locked to wherever
+   that coach's own coaching-request resolution placed them, whether or
+   not the child also has a `Sibling` request on file.
+3. **Avoid requests** — always kept apart.
+4. **Transportation requests** — kept together when it doesn't come at too
+   much cost to balance.
+5. **Friend requests** — same as Transportation, lowest priority.
+
+Each player can list up to 3 teammate requests (`Teammate Request 1`/`2`/`3`
+paired with `Teammate Reason 1`/`2`/`3`), each independently honored
+according to the priority order above.
 
 ### Balancing logic
 

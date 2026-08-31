@@ -128,6 +128,25 @@ const MOCK_LAST = [
   "Doiron","Basque","Boucher","Bourque","Caissie","Daigle","Godin","Guerette","Haché","Vautour",
 ];
 
+// Blank starting-point templates — just the correct headers plus a couple of
+// clearly-marked example rows showing how requests reference another row by
+// exact name, for people building their real list from scratch rather than
+// exploring with generated data.
+const BLANK_PLAYERS_TEMPLATE = [
+  "Name,Year of Birth,Rating,Gender,Position,Teammate Request 1,Teammate Reason 1,Teammate Request 2,Teammate Reason 2,Teammate Request 3,Teammate Reason 3",
+  "EXAMPLE Jamie Smith,2015,3,Female,Forward,EXAMPLE Alex Smith,Sibling,,,,",
+  "EXAMPLE Alex Smith,2015,3,Male,Defense,EXAMPLE Jamie Smith,Sibling,,,,",
+  "EXAMPLE Riley Cormier,2015,2,Female,Defense,,,,,,",
+  "EXAMPLE Taylor Reid,2015,4,Male,Goalie,,,,,,",
+].join("\n");
+
+const BLANK_COACHES_TEMPLATE = [
+  "Coach,Role,Coach Request 1,Coach Request 2,Coach Request 3,Childs Names",
+  "EXAMPLE Pat Wilson,Head,,,,EXAMPLE Jamie Smith",
+  "EXAMPLE Sam Doucet,Assistant,EXAMPLE Pat Wilson,,,",
+  "EXAMPLE Robin Furlotte,Manager,EXAMPLE Pat Wilson,,,",
+].join("\n");
+
 // picks a team count that's always guaranteed to fit `numPlayers` under the
 // app's own roster caps (18 skaters / 1-2 goalies per team), instead of a
 // fixed number that might not fit — this is what broke the earlier
@@ -1595,6 +1614,34 @@ export default function TeamBalancer() {
           gap: 8px;
         }
         .priorityList li { padding-left: 4px; }
+        .priorityNote {
+          margin-top: 6px;
+          padding: 8px 12px;
+          background: #F4F8FB;
+          border-left: 3px solid var(--border);
+          font-size: 13.5px;
+          color: var(--muted);
+          border-radius: 4px;
+        }
+        .balanceList {
+          margin: 0 0 14px;
+          padding-left: 22px;
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+          list-style: decimal;
+        }
+        .howBody-note { font-size: 13.5px; color: var(--muted); }
+        .stepsList {
+          margin: 0 0 20px;
+          padding-left: 22px;
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+          font-size: 15px;
+          line-height: 1.5;
+        }
+        .stepsList li { padding-left: 4px; }
       `}</style>
 
       <div className="hero">
@@ -1621,31 +1668,33 @@ export default function TeamBalancer() {
             <summary>How team assignments are prioritized</summary>
             <div className="howBody">
               <p>
-                Requests are honored in this order. The first three are treated as{" "}
-                <strong>hard requirements</strong> — the app will not break them to improve
-                balance, and will show an error if they can't all be satisfied at once (e.g. a
-                chain of coaching requests that would merge two different teams). The last two are{" "}
-                <strong>best effort</strong> — honored whenever possible, but sacrificed first if
-                honoring them would force a team badly out of balance.
+                Requests are honored in a strict order, top to bottom. The first three are{" "}
+                <strong>hard requirements</strong> — never broken to improve balance. If two of
+                them genuinely conflict (e.g. two head coaches both need the same assistant), the
+                app still makes a decision and shows an error explaining the conflict, rather than
+                failing silently. The last two are <strong>best effort</strong> — honored whenever
+                possible, but the first things sacrificed if honoring them would throw a team badly
+                out of balance.
               </p>
               <ol className="priorityList">
                 <li>
-                  <strong>Coaches who want to coach together</strong> — any Head or Assistant coach
-                  can list up to 3 other coaches they want to work with (Managers can too). They're
-                  grouped onto the same team whenever possible. Groups anchor to whichever head
-                  coach is in them; a request that would combine two different head coaches' teams
-                  can't be honored and is reported as an error instead. Teams are capped at 5 Head +
-                  Assistant coaches — Managers don't count against that cap, so a team can have its
-                  5 Head/Assistants plus a Manager on top. If honoring a coaching-together request
-                  would push a team over the 5-coach cap, it's still honored (this is the top
-                  priority) and flagged as an error so you can review it. Coaches with no successful
-                  request, or no request at all, are spread evenly across teams.
+                  <strong>Coaches who want to coach together.</strong> Any coach — Head, Assistant,
+                  or Manager — can list up to 3 others they want to work with, and the app groups
+                  them onto the same team wherever that's possible.
+                  <div className="priorityNote">
+                    Each team is capped at 5 coaches counting Head + Assistant only — Managers
+                    don't count against that cap. If a coaching-together request would push a team
+                    past that cap, it's still honored (this rule is the top priority) and flagged
+                    as an error so you can review it. A request that would require merging two
+                    different head coaches' teams can't be honored at all — that's also flagged.
+                    Coaches with no request, or an unsuccessful one, are spread evenly across
+                    teams.
+                  </div>
                 </li>
                 <li>
-                  <strong>Sibling requests</strong> — always kept together. Each player can list up
-                  to 3 teammate requests, each with its own reason (Sibling, Avoid, Transportation,
-                  or Friend). A coach's own listed children are treated the same way as a sibling
-                  request, automatically locked to whichever team that coach ends up on.
+                  <strong>Sibling requests</strong> — always kept together. A coach's own listed
+                  children are treated the same way, automatically locked to whichever team that
+                  coach ends up on.
                 </li>
                 <li>
                   <strong>Avoid requests</strong> — always kept apart.
@@ -1658,18 +1707,88 @@ export default function TeamBalancer() {
                   <strong>Friend requests</strong> — same as Transportation, lowest priority.
                 </li>
               </ol>
-              <p>
-                After requests are placed, the app balances everything else it can: keeping every
-                team's total roster size equal (within 1 player, if the roster doesn't divide
-                evenly), the number of forwards and defense per team, overall skater rating per
-                team, birth-year split, how many top-rated (4+) and lower-rated (under 2) skaters
-                land on each team, 1–2 goalies per team, and making sure no team ends up with
-                exactly one female player (every team has either zero or at least two). The results
-                screen shows exactly which requests couldn't be honored and why, so nothing is a
-                silent trade-off.
+              <p className="howBody-note">
+                Each player can list up to 3 teammate requests, each with its own reason (Sibling,
+                Avoid, Transportation, or Friend) — they're all honored according to the priority
+                order above, independently of each other.
+              </p>
+              <p style={{ marginTop: 18 }}>
+                <strong>Once requests are placed, everything else is balanced as evenly as
+                possible</strong> across teams — most important first:
+              </p>
+              <ul className="balanceList">
+                <li>Total roster size (within 1 player, if the roster doesn't divide evenly)</li>
+                <li>Number of forwards and number of defense</li>
+                <li>Overall skater rating</li>
+                <li>Birth-year split</li>
+                <li>Top-rated (4+) and lower-rated (under 2) skater counts</li>
+                <li>Goalies (1–2 per team)</li>
+                <li>Female players (never exactly 1 on a team — zero or at least two)</li>
+              </ul>
+              <p className="howBody-note">
+                The results screen always shows exactly which requests couldn't be honored and
+                why, so nothing is a silent trade-off.
               </p>
             </div>
           </details>
+        </div>
+
+        <div className="panel">
+          <h2>New here? Start with a blank template</h2>
+          <p className="sub">
+            If you don't already have your player and coach lists in a spreadsheet, the fastest
+            way to get going is to download the two blank templates below, fill them in, and
+            upload them back here. No special software needed — a free Google Sheet works fine.
+          </p>
+          <ol className="stepsList">
+            <li>
+              <strong>Download both templates</strong> using the buttons below. Each one opens
+              fine in Excel, Google Sheets, or Apple Numbers.
+            </li>
+            <li>
+              <strong>Delete the example rows</strong> (the ones starting with "EXAMPLE") once
+              you understand the format — they're just there to show you what a filled-in row
+              looks like, including how a request references someone else by name.
+            </li>
+            <li>
+              <strong>Add one row per person</strong> below the header row. Don't rename, reorder,
+              or delete any of the column headers in the first row — the app looks for them by
+              exact name.
+            </li>
+            <li>
+              <strong>Spell names exactly the same everywhere.</strong> If you type a teammate or
+              coaching request, it has to match that person's name in the `Name`/`Coach` column
+              exactly — including spelling and capitalization — or the app won't be able to find
+              them.
+            </li>
+            <li>
+              <strong>Save your file as a CSV</strong>, not as an Excel or Sheets file:
+              <div className="priorityNote">
+                In Google Sheets: <strong>File → Download → Comma Separated Values (.csv)</strong>
+                <br />
+                In Excel: <strong>File → Save As</strong>, then choose <strong>CSV</strong> as the
+                file type
+              </div>
+            </li>
+            <li>
+              <strong>Upload both CSV files</strong> in the "Upload rosters" section below, enter
+              your number of teams, and click <strong>Generate teams</strong>.
+            </li>
+          </ol>
+          <div className="controlsRow" style={{ marginTop: 4 }}>
+            <button
+              className="btn btn-outline"
+              onClick={() => downloadTextFile("players_template.csv", BLANK_PLAYERS_TEMPLATE)}
+            >
+              Download blank players template
+            </button>
+            <button
+              className="btn btn-outline"
+              onClick={() => downloadTextFile("coaches_template.csv", BLANK_COACHES_TEMPLATE)}
+            >
+              Download blank coaches template
+            </button>
+          </div>
         </div>
 
         <div className="panel">
