@@ -984,46 +984,55 @@ function buildTeams(players, coaches, numTeams) {
     .sort((a, b) => b.goalieCount - a.goalieCount || b.goalieRatingSum - a.goalieRatingSum);
   multiGoalieUnits.forEach((u) => placeGoalieUnit(u, teams));
 
-  // Single-goalie units are the free-to-pair case: sort weakest to
-  // strongest, then match from the outside in (weakest with strongest, 2nd
-  // weakest with 2nd strongest, ...) so each team's two goalies are a
-  // strong/weak pair rather than two similar ratings.
+  // Single-goalie units: two phases, in strict priority order.
+  //
+  // Phase 1 — coverage: every team must reach at least one goalie before
+  // any team gets a second. This is non-negotiable (a team with zero
+  // goalies is a hard failure), so it happens first, using the same
+  // fewest-goalies-first logic as multi-goalie units above. Units are
+  // pulled from the middle of the sorted list where possible so the true
+  // extremes survive for Phase 2 — though if a stronger constraint (avoid,
+  // caps) forces a different unit to be consumed instead, that's fine too.
+  //
+  // Phase 2 — pairing: whatever single goalies are left AFTER coverage is
+  // satisfied are the real surplus, and only these get the strongest/
+  // weakest treatment. Each surplus goalie becomes a SECOND goalie on some
+  // team that already has exactly one — matched so the team with the
+  // lowest current goalie rating gets the highest remaining surplus goalie
+  // (and vice versa), rather than clustering similar ratings together.
   const singleGoalieUnits = movableGoalieUnits.filter((u) => u.goalieCount === 1);
   const sortedSingles = [...singleGoalieUnits].sort(
     (a, b) => a.goalieRatingSum - b.goalieRatingSum
   );
-  const goaliePairs = [];
-  let lo = 0;
-  let hi = sortedSingles.length - 1;
-  while (lo < hi) {
-    goaliePairs.push([sortedSingles[lo], sortedSingles[hi]]);
-    lo++;
-    hi--;
+
+  while (sortedSingles.length > 0 && teams.some((t) => t.goalieCount === 0)) {
+    const midIdx = Math.floor(sortedSingles.length / 2);
+    const u = sortedSingles.splice(midIdx, 1)[0];
+    placeGoalieUnit(u, teams);
   }
-  const leftoverSingleGoalie = lo === hi ? sortedSingles[lo] : null;
 
-  goaliePairs.forEach(([weak, strong]) => {
-    // prefer a team that still has both goalie slots open, so the pair
-    // isn't split apart by a team that only has room left for one
-    const roomForBoth = teams.filter((t) => t.goalieCount + 2 <= GOALIE_CAP);
-    const pool = roomForBoth.length > 0 ? roomForBoth : teams;
-    const chosen = placeGoalieUnit(weak, pool);
-    if (canPlace(chosen, strong) && !violatesAvoid(chosen, strong)) {
-      place(chosen, strong);
-    } else {
-      // the team that took the weaker goalie can't also take the stronger
-      // one (avoid request or cap) — place it wherever else fits best
-      placeGoalieUnit(strong, teams);
-      errors.push(
-        `Could not keep goalies ${weak.names.join(", ")} and ${strong.names.join(
-          ", "
-        )} paired on the same team — an avoid request or roster cap got in the way. Placed separately — please review.`
-      );
+  if (sortedSingles.length > 0) {
+    const eligibleTeams = teams
+      .filter((t) => t.goalieCount === 1)
+      .sort((a, b) => a.goalieRatingSum / a.goalieCount - b.goalieRatingSum / b.goalieCount);
+    const leftoverDesc = [...sortedSingles].sort((a, b) => b.goalieRatingSum - a.goalieRatingSum);
+    const pairCount = Math.min(eligibleTeams.length, leftoverDesc.length);
+    const matchedIds = new Set();
+    for (let k = 0; k < pairCount; k++) {
+      const team = eligibleTeams[k];
+      const u = leftoverDesc[k];
+      matchedIds.add(u.id);
+      if (canPlace(team, u) && !violatesAvoid(team, u)) {
+        place(team, u);
+      } else {
+        // this specific extreme match isn't legal (avoid request or a cap
+        // got in the way) — fall back to normal best-fit placement for it
+        placeGoalieUnit(u, teams);
+      }
     }
-  });
-
-  if (leftoverSingleGoalie) {
-    placeGoalieUnit(leftoverSingleGoalie, teams);
+    // anything beyond pairCount (e.g. more surplus goalies than teams that
+    // can still take a second) falls back to normal best-fit placement
+    sortedSingles.filter((u) => !matchedIds.has(u.id)).forEach((u) => placeGoalieUnit(u, teams));
   }
 
   const movable = stillMovable
