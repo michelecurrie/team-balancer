@@ -214,12 +214,18 @@ weight:
 3. **Top-rated (4+) and bottom-rated (under 2) skater counts per team** -
    spread out instead of clustering on one team.
 4. **Overall / forward / defense average rating per team** - kept close to
-   the roster-wide average.
+   the roster-wide average. "Overall" reflects every rostered player,
+   goalies included.
 5. **Birth-year split per team** - works with whatever birth years are
    actually in your data (a 2014/2015 division, a 2016/2017 division, or
    any other set), not a fixed pair.
 6. **Goalies** - every team gets 1-2, assigned before skaters so no team
-   is left with zero.
+   is left with zero. When a team gets two, its strongest and weakest
+   available goalies are paired together rather than two similarly-rated
+   ones (e.g. with 8 goalies rated 1-8, the pairs are 1+8, 2+7, 3+6, 4+5).
+   A sibling pair of goalies who requested to stay together keeps that
+   pairing rather than being re-matched by rating. This pairing pass runs
+   before, and is protected from, the swap search in step 2 below.
 7. **Female pairing rule** - no team ends up with exactly one female
    player; every team has either zero or at least two.
 

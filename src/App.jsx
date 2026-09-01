@@ -831,13 +831,18 @@ function buildTeams(players, coaches, numTeams) {
     );
   }
   function placementCost(team, unit, avgOverall, avgFwd, avgDef, idealByYear) {
-    const newSkaters = team.forwardCount + team.defenseCount + unit.forwardCount + unit.defenseCount;
     const newRating = team.ratingSum + unit.ratingSum;
     const newFwdCount = team.forwardCount + unit.forwardCount;
     const newDefCount = team.defenseCount + unit.defenseCount;
     const newFwdRating = team.forwardRatingSum + unit.forwardRatingSum;
     const newDefRating = team.defenseRatingSum + unit.defenseRatingSum;
-    const overallAvg = newSkaters ? newRating / newSkaters : 0;
+    // "Overall" is meant to reflect the WHOLE roster (goalies included), so
+    // the denominator is the full player count, not just skaters —
+    // ratingSum already includes goalie ratings (see place()), so dividing
+    // by skaters-only here would inflate the average. See newTotal below.
+    const newTotal =
+      team.goalieCount + team.forwardCount + team.defenseCount + unit.goalieCount + unit.forwardCount + unit.defenseCount;
+    const overallAvg = newTotal ? newRating / newTotal : 0;
     const fwdAvg = newFwdCount ? newFwdRating / newFwdCount : 0;
     const defAvg = newDefCount ? newDefRating / newDefCount : 0;
     let cost =
@@ -854,8 +859,6 @@ function buildTeams(players, coaches, numTeams) {
     // the top ask here; the hard cap in canPlace already prevents any team
     // from exceeding its share, this just steers placement to fill evenly
     // rather than letting one team hit the cap early while another lags
-    const newTotal =
-      team.goalieCount + team.forwardCount + team.defenseCount + unit.goalieCount + unit.forwardCount + unit.defenseCount;
     cost += newTotal * 12;
     // spread out top-rated (4+) and bottom-rated (<2) skaters instead of
     // letting them cluster — reward whichever team currently has fewer, not
@@ -927,21 +930,29 @@ function buildTeams(players, coaches, numTeams) {
 
   // ---- goalies get their own placement pass first, so every team reaches 1-2 before ----
   // ---- skater balancing (otherwise goalies get swept up arbitrarily among skaters) ----
-  const movableGoalieUnits = stillMovable
-    .filter((u) => u.goalieCount > 0)
-    .sort((a, b) => b.goalieCount - a.goalieCount || b.ratingSum - a.ratingSum);
+  // Within that pass, when a team is going to get two goalies, pair its
+  // strongest available goalie with its weakest rather than two similarly
+  // rated ones — see pairSingleGoalieUnits below.
+  const movableGoalieUnits = stillMovable.filter((u) => u.goalieCount > 0);
 
-  movableGoalieUnits.forEach((u) => {
-    let candidates = teams.filter((t) => canPlace(t, u) && !violatesAvoid(t, u));
+  // helper shared by both the paired and single-slot placements below:
+  // finds the best team (from candidatesPool) for a goalie unit, preferring
+  // teams with the fewest goalies so far (so every team reaches at least 1
+  // before any team gets a 2nd), then balancing goalie rating between teams.
+  // Uses goalieRatingSum (not ratingSum) so a unit that also carries
+  // non-goalie teammates (e.g. a goalie/forward sibling pair) doesn't skew
+  // the goalie-average comparison with skater ratings.
+  function placeGoalieUnit(u, candidatesPool) {
+    let candidates = candidatesPool.filter((t) => canPlace(t, u) && !violatesAvoid(t, u));
     if (candidates.length === 0) {
       // relax the equal-size target first, but keep the avoid request and
       // the absolute 1-2 goalie cap intact if at all possible
-      candidates = teams.filter((t) => withinAbsoluteCaps(t, u) && !violatesAvoid(t, u));
+      candidates = candidatesPool.filter((t) => withinAbsoluteCaps(t, u) && !violatesAvoid(t, u));
       if (candidates.length === 0) {
         // avoid can't be honored alongside the goalie cap either — relax
         // avoid next, still trying to respect the absolute cap
-        candidates = teams.filter((t) => withinAbsoluteCaps(t, u));
-        if (candidates.length === 0) candidates = teams;
+        candidates = candidatesPool.filter((t) => withinAbsoluteCaps(t, u));
+        if (candidates.length === 0) candidates = candidatesPool.length ? candidatesPool : teams;
       }
       errors.push(
         `Could not find a team for goalie(s) ${u.names.join(
@@ -949,13 +960,11 @@ function buildTeams(players, coaches, numTeams) {
         )} within the 1-2 goalie cap or without breaking an avoid request. Placed on the least-bad team — please review.`
       );
     }
-    // prefer teams with the fewest goalies so far (so every team reaches at least 1
-    // before any team gets a 2nd), then balance goalie rating between teams
     let best = candidates[0];
     let bestCost = Infinity;
     candidates.forEach((t) => {
       const currentAvg = t.goalieCount ? t.goalieRatingSum / t.goalieCount : 0;
-      const newAvg = (t.goalieRatingSum + u.ratingSum) / (t.goalieCount + u.goalieCount);
+      const newAvg = (t.goalieRatingSum + u.goalieRatingSum) / (t.goalieCount + u.goalieCount);
       const cost = t.goalieCount * 100 + Math.abs(newAvg - currentAvg);
       if (cost < bestCost) {
         bestCost = cost;
@@ -963,7 +972,59 @@ function buildTeams(players, coaches, numTeams) {
       }
     });
     place(best, u);
+    return best;
+  }
+
+  // Units that already carry 2+ goalies (e.g. two goalie siblings who
+  // requested to stay together) have their pairing fixed by that request —
+  // there's nothing to re-optimize, so place them as a block using the
+  // fewest-goalies-first + average-balancing logic above.
+  const multiGoalieUnits = movableGoalieUnits
+    .filter((u) => u.goalieCount > 1)
+    .sort((a, b) => b.goalieCount - a.goalieCount || b.goalieRatingSum - a.goalieRatingSum);
+  multiGoalieUnits.forEach((u) => placeGoalieUnit(u, teams));
+
+  // Single-goalie units are the free-to-pair case: sort weakest to
+  // strongest, then match from the outside in (weakest with strongest, 2nd
+  // weakest with 2nd strongest, ...) so each team's two goalies are a
+  // strong/weak pair rather than two similar ratings.
+  const singleGoalieUnits = movableGoalieUnits.filter((u) => u.goalieCount === 1);
+  const sortedSingles = [...singleGoalieUnits].sort(
+    (a, b) => a.goalieRatingSum - b.goalieRatingSum
+  );
+  const goaliePairs = [];
+  let lo = 0;
+  let hi = sortedSingles.length - 1;
+  while (lo < hi) {
+    goaliePairs.push([sortedSingles[lo], sortedSingles[hi]]);
+    lo++;
+    hi--;
+  }
+  const leftoverSingleGoalie = lo === hi ? sortedSingles[lo] : null;
+
+  goaliePairs.forEach(([weak, strong]) => {
+    // prefer a team that still has both goalie slots open, so the pair
+    // isn't split apart by a team that only has room left for one
+    const roomForBoth = teams.filter((t) => t.goalieCount + 2 <= GOALIE_CAP);
+    const pool = roomForBoth.length > 0 ? roomForBoth : teams;
+    const chosen = placeGoalieUnit(weak, pool);
+    if (canPlace(chosen, strong) && !violatesAvoid(chosen, strong)) {
+      place(chosen, strong);
+    } else {
+      // the team that took the weaker goalie can't also take the stronger
+      // one (avoid request or cap) — place it wherever else fits best
+      placeGoalieUnit(strong, teams);
+      errors.push(
+        `Could not keep goalies ${weak.names.join(", ")} and ${strong.names.join(
+          ", "
+        )} paired on the same team — an avoid request or roster cap got in the way. Placed separately — please review.`
+      );
+    }
   });
+
+  if (leftoverSingleGoalie) {
+    placeGoalieUnit(leftoverSingleGoalie, teams);
+  }
 
   const movable = stillMovable
     .filter((u) => u.goalieCount === 0)
@@ -992,8 +1053,11 @@ function buildTeams(players, coaches, numTeams) {
 
   movable.forEach((u) => {
     const totalRatingSum = teams.reduce((s, t) => s + t.ratingSum, 0);
-    const totalSkatersNow = teams.reduce((s, t) => s + t.forwardCount + t.defenseCount, 0) || 1;
-    const avgOverall = totalRatingSum / totalSkatersNow;
+    // "Overall" includes goalies (ratingSum already does — see place()), so
+    // the denominator has to be every rostered player, not skaters alone.
+    const totalRosteredNow =
+      teams.reduce((s, t) => s + t.goalieCount + t.forwardCount + t.defenseCount, 0) || 1;
+    const avgOverall = totalRatingSum / totalRosteredNow;
     const totalFwd = teams.reduce((s, t) => s + t.forwardCount, 0) || 1;
     const totalFwdRating = teams.reduce((s, t) => s + t.forwardRatingSum, 0);
     const avgFwd = totalFwdRating / totalFwd;
@@ -1032,15 +1096,17 @@ function buildTeams(players, coaches, numTeams) {
 
   // ---- local search swap improvement ----
   function totalImbalance() {
-    const skaterCounts = teams.map((t) => t.forwardCount + t.defenseCount);
-    const overallAvgs = teams.map((t, i) => (skaterCounts[i] ? t.ratingSum / skaterCounts[i] : 0));
+    // total roster count (goalies + skaters) — ratingSum already includes
+    // goalie ratings (see place()), so "overall" has to divide by everyone,
+    // not skaters alone, or it comes out inflated.
+    const totalCounts = teams.map((t) => t.goalieCount + t.forwardCount + t.defenseCount);
+    const overallAvgs = teams.map((t, i) => (totalCounts[i] ? t.ratingSum / totalCounts[i] : 0));
     const fwdAvgs = teams.map((t) => (t.forwardCount ? t.forwardRatingSum / t.forwardCount : 0));
     const defAvgs = teams.map((t) => (t.defenseCount ? t.defenseRatingSum / t.defenseCount : 0));
     const fwdCounts = teams.map((t) => t.forwardCount);
     const defCounts = teams.map((t) => t.defenseCount);
     const highCounts = teams.map((t) => t.highRatedCount);
     const lowCounts = teams.map((t) => t.lowRatedCount);
-    const totalCounts = teams.map((t) => t.goalieCount + t.forwardCount + t.defenseCount);
     const spread = (arr) => Math.max(...arr) - Math.min(...arr);
     let score =
       spread(overallAvgs) * 2 +
@@ -1063,7 +1129,11 @@ function buildTeams(players, coaches, numTeams) {
     return score;
   }
 
-  const movableUnits = units.filter((u) => u.lockedTeam === null);
+  // goalie units are excluded here — they were deliberately paired
+  // strongest-with-weakest above, and this general swap pass (which only
+  // optimizes for overall/forward/defense balance) has no notion of that
+  // pairing, so letting it touch goalie units could undo it.
+  const movableUnits = units.filter((u) => u.lockedTeam === null && u.goalieCount === 0);
   let improved = true;
   let passes = 0;
   while (improved && passes < 8) {
@@ -2085,7 +2155,11 @@ export default function TeamBalancer() {
             <div className="teamsGrid">
               {result.teams.map((t, i) => {
                 const skaters = t.forwardCount + t.defenseCount;
-                const overallAvg = skaters ? (t.ratingSum / skaters).toFixed(2) : "—";
+                const totalRoster = t.goalieCount + skaters;
+                // ratingSum includes goalie ratings (see place()), so the
+                // "overall" average has to divide by the whole roster, not
+                // skaters alone, or it comes out higher than Fwd/Def.
+                const overallAvg = totalRoster ? (t.ratingSum / totalRoster).toFixed(2) : "—";
                 const fwdAvg = t.forwardCount ? (t.forwardRatingSum / t.forwardCount).toFixed(2) : "—";
                 const defAvg = t.defenseCount ? (t.defenseRatingSum / t.defenseCount).toFixed(2) : "—";
                 const color = jerseyColors[i % jerseyColors.length];
