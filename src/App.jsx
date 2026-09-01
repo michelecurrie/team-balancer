@@ -1708,7 +1708,7 @@ export default function TeamBalancer() {
         <h1>Balance the Bench</h1>
         <p>
           Turn a full recreational season's registration list into balanced, fair teams in
-          minutes — not for competitive tryout drafts. Upload your player and coach spreadsheets,
+          minutes — not for competitive teams. Upload your player and coach spreadsheets,
           set how many teams you're forming, and the builder does the rest — honoring coach and
           sibling requests first, then balancing skill, position, and birth year as evenly as
           possible around them.
