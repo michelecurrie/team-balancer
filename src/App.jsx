@@ -1295,7 +1295,17 @@ function exportCSV(teams) {
       });
     });
   });
-  const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+  // Guard against CSV/formula injection: a cell that starts with =, +, -, or @
+  // gets interpreted as a formula by Excel/Sheets when the file is reopened.
+  // Prefixing it with a leading apostrophe forces those apps to treat it as
+  // plain text instead of executing it.
+  const escapeFormula = (v) => {
+    const s = String(v);
+    return /^[=+\-@]/.test(s) ? `'${s}` : s;
+  };
+  const csv = rows
+    .map((r) => r.map((c) => `"${escapeFormula(c).replace(/"/g, '""')}"`).join(","))
+    .join("\n");
   downloadTextFile("team_rosters.csv", csv);
 }
 
