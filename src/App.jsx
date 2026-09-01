@@ -1408,7 +1408,7 @@ export default function TeamBalancer() {
   return (
     <div className="app">
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Grotesk:wght@600;700&family=Inter:wght@400;500;600;700&family=Roboto+Mono:wght@500&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Archivo+Black&family=Sora:wght@700;800&family=Inter:wght@400;500;600;700&family=Roboto+Mono:wght@500&display=swap');
         :root {
           --ice: #F4F8FB;
           --rink-navy: #0B1D3A;
@@ -1473,7 +1473,8 @@ export default function TeamBalancer() {
         }
         .panel + .panel { margin-top: 24px; }
         .panel h2 {
-          font-family: 'Space Grotesk', sans-serif;
+          font-family: 'Sora', sans-serif;
+          font-weight: 800;
           font-size: 18px;
           margin: 0 0 4px;
         }
@@ -1510,7 +1511,8 @@ export default function TeamBalancer() {
         .sampleBox-toggle:hover { background: #EFF4FA; }
         .sampleBox-toggle-text { display: flex; flex-direction: column; gap: 2px; }
         .sampleBox-label {
-          font-family: 'Space Grotesk', sans-serif;
+          font-family: 'Sora', sans-serif;
+          font-weight: 800;
           font-size: 13px;
           text-transform: uppercase;
           letter-spacing: 0.04em;
@@ -1582,7 +1584,8 @@ export default function TeamBalancer() {
         .warnBox { background: #FFF8E6; border: 1px solid #F2DFA0; }
         .noteBox { background: #EEF4FB; border: 1px solid #C6DCF0; border-radius: 8px; padding: 16px 18px; margin-bottom: 14px; }
         .noteBox h3 {
-          font-family: 'Space Grotesk', sans-serif;
+          font-family: 'Sora', sans-serif;
+          font-weight: 800;
           font-size: 14px;
           margin: 0 0 8px;
           text-transform: uppercase;
@@ -1592,7 +1595,8 @@ export default function TeamBalancer() {
         .noteBox-summary { margin: 0 0 8px; font-size: 15px; color: var(--muted); }
         .noteBox ul { margin: 0; padding-left: 18px; font-size: 15px; line-height: 1.5; }
         .errorBox h3, .warnBox h3 {
-          font-family: 'Space Grotesk', sans-serif;
+          font-family: 'Sora', sans-serif;
+          font-weight: 800;
           font-size: 14px;
           margin: 0 0 8px;
           text-transform: uppercase;
@@ -1625,7 +1629,8 @@ export default function TeamBalancer() {
           text-transform: uppercase;
         }
         .teamCard-coach {
-          font-family: 'Space Grotesk', sans-serif;
+          font-family: 'Sora', sans-serif;
+          font-weight: 800;
           font-size: 20px;
           margin-top: 2px;
         }
