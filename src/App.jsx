@@ -1721,7 +1721,7 @@ export default function TeamBalancer() {
           <p className="sub" style={{ marginBottom: 16 }}>
             This tool splits a full recreational season's registration list into balanced teams
             for your coaches — it's built for house-league/rec play, not for seeding a
-            competitive tryout draft. Upload a players spreadsheet and a coaches spreadsheet, tell
+            competitive draft. Upload a players spreadsheet and a coaches spreadsheet, tell
             it how many teams you're forming, and it assigns every player to a team — honoring
             the requests that matter most, then balancing everything else as evenly as it can
             around them.
