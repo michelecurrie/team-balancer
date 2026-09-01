@@ -1,12 +1,13 @@
 # Balance the Bench — Team Roster Builder
 
-A tool for splitting a season's hockey registration list into balanced teams.
-Upload a players spreadsheet and a coaches spreadsheet, set how many teams
-you're forming, and it assigns every player to a team — honoring the
-requests that matter most (coach pairings, siblings, avoid requests), then
-balancing everything else (skater strength, position counts, birth year,
-rating spread, goalie counts, and female pairing) as evenly as possible
-around them.
+A tool for splitting a full **recreational** season's hockey registration
+list into balanced teams — built for house-league/rec play, not for seeding
+a competitive tryout draft. Upload a players spreadsheet and a coaches
+spreadsheet, set how many teams you're forming, and it assigns every player
+to a team — honoring the requests that matter most (coach pairings,
+siblings, avoid requests), then balancing everything else (skater strength,
+position counts, birth year, rating spread, goalie counts, and female
+pairing) as evenly as possible around them.
 
 Runs entirely in the browser. No backend, no database — CSVs go in, a
 roster comes out.
@@ -128,14 +129,17 @@ free Google Sheet works fine:
 - Excel: **File → Save As**, then choose **CSV** as the file type
 
 The most common mistake is a typo in a request name — it has to match the
-`Name` (or `Coach`) column exactly, including capitalization, or the app
-won't find who it's referring to.
+`Name` (or `Coach`) column exactly (spelling, spacing, and any middle names
+or initials all count). Capitalization doesn't matter — matching is
+case-insensitive — but anything else that differs will keep the app from
+finding who it's referring to.
 
 ### Sample data
 
 The app can generate a mock roster of any size, up to 200 players, entirely
 in the browser — useful for trying the app before touching your real data,
-or as a formatting reference. In the "Sample data" box:
+or as a formatting reference. In the "Upload rosters" step, click **"Don't
+have CSVs yet? Try sample data"** to expand the sample data box, then:
 
 1. Enter how many players you want (20–200).
 2. Click **"Generate sample data"** — this creates a full players CSV and a

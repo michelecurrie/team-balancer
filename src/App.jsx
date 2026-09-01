@@ -1355,6 +1355,7 @@ export default function TeamBalancer() {
   const [ran, setRan] = useState(false);
   const [mockPlayerCount, setMockPlayerCount] = useState(100);
   const [mockData, setMockData] = useState(null);
+  const [sampleOpen, setSampleOpen] = useState(false);
 
   const generateMock = () => {
     const n = Math.max(20, Math.min(200, parseInt(mockPlayerCount, 10) || 100));
@@ -1397,7 +1398,7 @@ export default function TeamBalancer() {
   return (
     <div className="app">
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Archivo+Black&family=Barlow+Condensed:wght@500;600;700&family=Roboto+Mono:wght@500&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600;700&family=Roboto+Mono:wght@500&display=swap');
         :root {
           --ice: #F4F8FB;
           --rink-navy: #0B1D3A;
@@ -1411,7 +1412,7 @@ export default function TeamBalancer() {
         }
         * { box-sizing: border-box; }
         .app {
-          font-family: 'Barlow Condensed', sans-serif;
+          font-family: 'Inter', sans-serif;
           background: var(--ice);
           color: var(--ink);
           min-height: 100%;
@@ -1468,25 +1469,59 @@ export default function TeamBalancer() {
         }
         .panel .sub { color: var(--muted); font-size: 15px; margin: 0 0 18px; }
         .fileRow { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px,1fr)); gap: 16px; }
+        .stepLabel {
+          font-family: 'Roboto Mono', monospace;
+          font-size: 12px;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+          color: var(--muted);
+          margin: 0 0 8px;
+        }
         .sampleBox {
           background: #F7FAFD;
           border: 1px solid var(--border);
           border-radius: 8px;
-          padding: 16px 18px;
-          margin-bottom: 20px;
+          margin-bottom: 24px;
+          overflow: hidden;
         }
+        .sampleBox-toggle {
+          width: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          background: none;
+          border: none;
+          cursor: pointer;
+          padding: 14px 18px;
+          text-align: left;
+          font-family: 'Inter', sans-serif;
+        }
+        .sampleBox-toggle:hover { background: #EFF4FA; }
+        .sampleBox-toggle-text { display: flex; flex-direction: column; gap: 2px; }
         .sampleBox-label {
           font-family: 'Archivo Black', sans-serif;
           font-size: 13px;
           text-transform: uppercase;
           letter-spacing: 0.04em;
           color: var(--rink-navy);
-          margin-bottom: 6px;
         }
-        .sampleBox-hint { font-size: 14px; color: var(--muted); margin: 0 0 12px; }
+        .sampleBox-tagline { font-size: 13px; color: var(--muted); }
+        .sampleBox-chevron {
+          font-size: 13px;
+          color: var(--muted);
+          transition: transform 0.15s ease;
+          flex-shrink: 0;
+        }
+        .sampleBox-chevron.open { transform: rotate(180deg); }
+        .sampleBox-body {
+          padding: 4px 18px 18px;
+          border-top: 1px solid var(--border);
+        }
+        .sampleBox-hint { font-size: 14px; color: var(--muted); margin: 14px 0 12px; }
         .sampleBox-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
         .sampleSelect {
-          font-family: 'Barlow Condensed', sans-serif;
+          font-family: 'Inter', sans-serif;
           font-size: 15px;
           padding: 9px 10px;
           border: 1px solid var(--border);
@@ -1505,7 +1540,7 @@ export default function TeamBalancer() {
         .fileDrop-hint { color: var(--muted); font-size: 13px; margin: 2px 0 10px; }
         .fileDrop-name { margin-top: 8px; font-size: 13px; color: #1B7A43; font-weight: 600; }
         .btn {
-          font-family: 'Barlow Condensed', sans-serif;
+          font-family: 'Inter', sans-serif;
           font-weight: 600;
           font-size: 15px;
           border-radius: 6px;
@@ -1593,6 +1628,15 @@ export default function TeamBalancer() {
         .statBar-fill { height: 100%; background: var(--rink-navy); }
         .rosterList { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 10px; max-height: 220px; overflow-y: auto; }
         .rosterRow { display: flex; justify-content: space-between; font-size: 14px; padding: 3px 0; }
+        .teamCard-stats {
+          display: flex;
+          flex-direction: column;
+          gap: 3px;
+          font-size: 13px;
+          color: var(--muted);
+          font-family: 'Roboto Mono', monospace;
+          margin-top: 10px;
+        }
         .rosterRow .pos { color: var(--muted); font-family: 'Roboto Mono', monospace; font-size: 11px; }
         .footerActions { display: flex; gap: 12px; margin-top: 24px; }
         .emptyState { text-align: center; padding: 40px 20px; color: var(--muted); }
@@ -1648,10 +1692,11 @@ export default function TeamBalancer() {
         <div className="hero-eyebrow">Season Roster Builder</div>
         <h1>Balance the Bench</h1>
         <p>
-          Upload your player and coach spreadsheets, set the number of teams, and let the builder
-          match coaches who want to work together, honor siblings and avoid pairs first — then
-          balance strength, position, birth year, and pairing rules as closely as possible around
-          them.
+          Turn a full recreational season's registration list into balanced, fair teams in
+          minutes — not for competitive tryout drafts. Upload your player and coach spreadsheets,
+          set how many teams you're forming, and the builder does the rest — honoring coach and
+          sibling requests first, then balancing skill, position, and birth year as evenly as
+          possible around them.
         </p>
       </div>
 
@@ -1659,10 +1704,12 @@ export default function TeamBalancer() {
         <div className="panel howPanel">
           <h2>What this is</h2>
           <p className="sub" style={{ marginBottom: 16 }}>
-            This tool splits a full season's registration list into balanced teams for your
-            coaches. Upload a players spreadsheet and a coaches spreadsheet, tell it how many
-            teams you're forming, and it assigns every player to a team — honoring the requests
-            that matter most, then balancing everything else as evenly as it can around them.
+            This tool splits a full recreational season's registration list into balanced teams
+            for your coaches — it's built for house-league/rec play, not for seeding a
+            competitive tryout draft. Upload a players spreadsheet and a coaches spreadsheet, tell
+            it how many teams you're forming, and it assigns every player to a team — honoring
+            the requests that matter most, then balancing everything else as evenly as it can
+            around them.
           </p>
           <details>
             <summary>How team assignments are prioritized</summary>
@@ -1758,8 +1805,9 @@ export default function TeamBalancer() {
             <li>
               <strong>Spell names exactly the same everywhere.</strong> If you type a teammate or
               coaching request, it has to match that person's name in the `Name`/`Coach` column
-              exactly — including spelling and capitalization — or the app won't be able to find
-              them.
+              exactly — spelling, spacing, and extra initials all count. Capitalization doesn't
+              matter (the app matches names case-insensitively), but a typo or a different name
+              variant will still stop it from being found.
             </li>
             <li>
               <strong>Save your file as a CSV</strong>, not as an Excel or Sheets file:
@@ -1789,75 +1837,139 @@ export default function TeamBalancer() {
               Download blank coaches template
             </button>
           </div>
+          <details style={{ marginTop: 18 }}>
+            <summary>Column format reference</summary>
+            <div className="howBody">
+              <p>
+                <strong>Players CSV</strong> — one row per player, with these columns:
+              </p>
+              <ul className="balanceList">
+                <li><strong>Name</strong></li>
+                <li><strong>Year of Birth</strong></li>
+                <li><strong>Rating</strong></li>
+                <li><strong>Gender</strong></li>
+                <li>
+                  <strong>Position</strong> — Goalie, Forward, or Defense ("Defence", "Def",
+                  "Fwd" and single-letter abbreviations are also recognized)
+                </li>
+                <li>
+                  <strong>Teammate Request 1 / 2 / 3</strong> and{" "}
+                  <strong>Teammate Reason 1 / 2 / 3</strong> — up to 3 optional pairs, each
+                  request naming another player and each reason being one of{" "}
+                  <strong>Sibling</strong>, <strong>Avoid</strong>,{" "}
+                  <strong>Transportation</strong>, or <strong>Friend</strong>
+                </li>
+              </ul>
+              <p className="howBody-note">
+                <strong>Coaches CSV</strong> — one row per coach, with these columns:
+              </p>
+              <ul className="balanceList">
+                <li><strong>Coach</strong></li>
+                <li>
+                  <strong>Role</strong> — Head, Assistant, or Manager
+                </li>
+                <li>
+                  <strong>Coach Request 1 / 2 / 3</strong> — up to 3 optional requests, each
+                  naming another coach (any role) this person wants to coach with
+                </li>
+                <li>
+                  <strong>Childs Names</strong> — optional; semicolon-separated if more than one
+                </li>
+              </ul>
+              <p className="howBody-note">
+                Teams are capped at 5 Head + Assistant coaches total — Managers don't count
+                against that cap.
+              </p>
+            </div>
+          </details>
         </div>
 
         <div className="panel">
           <h2>1. Upload rosters</h2>
           <p className="sub">
-            Players CSV needs: Name, Year of Birth, Rating, Gender, Position (Goalie / Forward /
-            Defense — "Defence", "Def", "Fwd" and single-letter abbreviations are also recognized),
-            and up to 3 teammate requests as pairs of columns: Teammate Request 1, Teammate Reason
-            1, Teammate Request 2, Teammate Reason 2, Teammate Request 3, Teammate Reason 3 (all
-            optional). Coaches CSV needs: Coach, Role (Head, Assistant, or Manager — one row per
-            coach), Coach Request 1–3 (up to 3 other coaches this person wants to coach with),
-            Childs Names. Coach Request and Childs Names can be left blank. Teams are capped at 5
-            Head + Assistant coaches total — Managers don't count against that cap.
+            Two CSVs required — one listing your players, one listing your coaches. Need the
+            exact column names? See <strong>Column format reference</strong> above, or grab a
+            blank template.
           </p>
 
           <div className="sampleBox">
-            <div className="sampleBox-label">Sample data</div>
-            <p className="sampleBox-hint">
-              Not sure of the format, or just want to try the app first? Pick how many players you
-              want (up to 200) and generate a mock roster sized to match — the team count is worked
-              out automatically so it always fits the app's roster caps.
-            </p>
-            <div className="sampleBox-row">
-              <input
-                type="number"
-                className="sampleSelect"
-                style={{ minWidth: 140 }}
-                min="20"
-                max="200"
-                value={mockPlayerCount}
-                onChange={(e) => setMockPlayerCount(e.target.value)}
-              />
-              <span style={{ fontSize: 14, color: "var(--muted)" }}>players (max 200)</span>
-              <button className="btn btn-primary" onClick={generateMock}>
-                Generate sample data
-              </button>
-            </div>
-            {mockData && (
-              <>
-                <p className="sampleBox-detail">
-                  {mockData.totalPlayers} total players ({mockData.goalieCount} goalies,{" "}
-                  {mockData.skaterCount} skaters) across {mockData.teamCount} teams · birth years{" "}
-                  {mockData.birthYears.join(" / ")}
+            <button
+              type="button"
+              className="sampleBox-toggle"
+              onClick={() => setSampleOpen((v) => !v)}
+              aria-expanded={sampleOpen}
+            >
+              <span className="sampleBox-toggle-text">
+                <span className="sampleBox-label">Don't have CSVs yet? Try sample data</span>
+                <span className="sampleBox-tagline">
+                  Generate a mock roster and skip straight to a working example
+                </span>
+              </span>
+              <span className={`sampleBox-chevron${sampleOpen ? " open" : ""}`}>▼</span>
+            </button>
+            {sampleOpen && (
+              <div className="sampleBox-body">
+                <p className="sampleBox-hint">
+                  Pick how many players you want (up to 200) and generate a mock roster sized to
+                  match — the team count is worked out automatically so it always fits the app's
+                  roster caps.
                 </p>
-                <div className="sampleBox-row" style={{ marginTop: 10 }}>
-                  <button className="btn btn-primary" onClick={loadMockIntoApp}>
-                    Load into app
-                  </button>
-                  <button
-                    className="btn btn-outline"
-                    onClick={() =>
-                      downloadTextFile(`players_mock_${mockData.totalPlayers}.csv`, mockData.playersCSV)
-                    }
-                  >
-                    Download players CSV
-                  </button>
-                  <button
-                    className="btn btn-outline"
-                    onClick={() =>
-                      downloadTextFile(`coaches_mock_${mockData.totalPlayers}.csv`, mockData.coachesCSV)
-                    }
-                  >
-                    Download coaches CSV
+                <div className="sampleBox-row">
+                  <input
+                    type="number"
+                    className="sampleSelect"
+                    style={{ minWidth: 140 }}
+                    min="20"
+                    max="200"
+                    value={mockPlayerCount}
+                    onChange={(e) => setMockPlayerCount(e.target.value)}
+                  />
+                  <span style={{ fontSize: 14, color: "var(--muted)" }}>players (max 200)</span>
+                  <button className="btn btn-primary" onClick={generateMock}>
+                    Generate sample data
                   </button>
                 </div>
-              </>
+                {mockData && (
+                  <>
+                    <p className="sampleBox-detail">
+                      {mockData.totalPlayers} total players ({mockData.goalieCount} goalies,{" "}
+                      {mockData.skaterCount} skaters) across {mockData.teamCount} teams · birth
+                      years {mockData.birthYears.join(" / ")}
+                    </p>
+                    <div className="sampleBox-row" style={{ marginTop: 10 }}>
+                      <button className="btn btn-primary" onClick={loadMockIntoApp}>
+                        Load into app
+                      </button>
+                      <button
+                        className="btn btn-outline"
+                        onClick={() =>
+                          downloadTextFile(
+                            `players_mock_${mockData.totalPlayers}.csv`,
+                            mockData.playersCSV
+                          )
+                        }
+                      >
+                        Download players CSV
+                      </button>
+                      <button
+                        className="btn btn-outline"
+                        onClick={() =>
+                          downloadTextFile(
+                            `coaches_mock_${mockData.totalPlayers}.csv`,
+                            mockData.coachesCSV
+                          )
+                        }
+                      >
+                        Download coaches CSV
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             )}
           </div>
 
+          <p className="stepLabel">Your files</p>
           <div className="fileRow">
             <FileDrop
               label="Players CSV"
@@ -1878,7 +1990,9 @@ export default function TeamBalancer() {
               }}
             />
           </div>
-          <div className="controlsRow">
+
+          <p className="stepLabel" style={{ marginTop: 20 }}>Team count &amp; build</p>
+          <div className="controlsRow" style={{ marginTop: 8 }}>
             <div className="numInput">
               <label>Number of teams</label>
               <input
@@ -1989,15 +2103,17 @@ export default function TeamBalancer() {
                         <span>Fwd {fwdAvg}</span>
                         <span>Def {defAvg}</span>
                       </div>
-                      <div style={{ fontSize: 13, marginTop: 6, color: "var(--muted)" }}>
-                        {t.femaleCount} female ·{" "}
+                      <div className="teamCard-stats">
+                        <div>{t.femaleCount} female</div>
                         {Object.keys(t.birthYears)
                           .sort()
-                          .map((y) => `'${y.slice(-2)}: ${t.birthYears[y]}`)
-                          .join(" · ")}
-                      </div>
-                      <div style={{ fontSize: 13, marginTop: 2, color: "var(--muted)" }}>
-                        4+ rated: {t.highRatedCount} · Under 2 rated: {t.lowRatedCount}
+                          .map((y) => (
+                            <div key={y}>
+                              {y}: {t.birthYears[y]}
+                            </div>
+                          ))}
+                        <div>4+ rated: {t.highRatedCount}</div>
+                        <div>Under 2 rated: {t.lowRatedCount}</div>
                       </div>
                       <div className="rosterList">
                         {t.units
