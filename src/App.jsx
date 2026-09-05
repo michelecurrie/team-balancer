@@ -1859,11 +1859,10 @@ export default function TeamBalancer() {
               </p>
               <ul className="balanceList">
                 <li>Total roster size (within 1 player, if the roster doesn't divide evenly)</li>
-                <li>Number of forwards and number of defense</li>
+                <li>Number of forwards, defense, and goalies</li>
                 <li>Overall skater rating</li>
                 <li>Birth-year split</li>
                 <li>Top-rated (4+) and lower-rated (under 2) skater counts</li>
-                <li>Goalies (1–2 per team)</li>
                 <li>Female players (never exactly 1 on a team — zero or at least two)</li>
               </ul>
               <p className="howBody-note">
