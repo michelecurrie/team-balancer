@@ -2043,7 +2043,7 @@ export default function TeamBalancer() {
                           )
                         }
                       >
-                        Download players CSV
+                        Download Mock Players CSV
                       </button>
                       <button
                         className="btn btn-outline"
@@ -2054,7 +2054,7 @@ export default function TeamBalancer() {
                           )
                         }
                       >
-                        Download coaches CSV
+                        Download Mock Coaches CSV
                       </button>
                     </div>
                   </>
