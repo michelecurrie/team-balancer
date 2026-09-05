@@ -1514,14 +1514,6 @@ export default function TeamBalancer() {
           position: relative;
           overflow: hidden;
         }
-        .hero::after {
-          content: "";
-          position: absolute;
-          left: -10%; right: -10%; bottom: -60px;
-          height: 120px;
-          border-top: 3px solid rgba(200,16,46,0.55);
-          border-radius: 50%;
-        }
         .hero-eyebrow {
           font-family: 'Roboto Mono', monospace;
           letter-spacing: 0.18em;
