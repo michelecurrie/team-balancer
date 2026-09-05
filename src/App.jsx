@@ -1535,7 +1535,7 @@ export default function TeamBalancer() {
           margin: 8px 0 6px;
           line-height: 1.05;
         }
-        .hero p { color: #C7D3E3; max-width: 640px; font-size: 18px; margin: 0; }
+        .hero p { color: #C7D3E3; max-width: 640px; font-size: 16px; margin: 0; }
         .section {
           max-width: 1080px;
           margin: -28px auto 0;
@@ -1954,7 +1954,7 @@ export default function TeamBalancer() {
                   <strong>Transportation</strong>, or <strong>Friend</strong>
                 </li>
               </ul>
-              <p className="howBody-note">
+              <p className="howBody">
                 <strong>Coaches CSV</strong> — one row per coach, with these columns:
               </p>
               <ul className="balanceList">
