@@ -1796,7 +1796,7 @@ export default function TeamBalancer() {
 
       <div className="section">
         <div className="panel howPanel">
-          <h2>What this is</h2>
+          <h2>What this tool does</h2>
           <p className="sub" style={{ marginBottom: 16 }}>
             This tool splits a full recreational season's registration list into balanced teams
             for your coaches — it's built for house-league/rec play, not for seeding a
