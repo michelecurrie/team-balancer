@@ -1501,7 +1501,7 @@ export default function TeamBalancer() {
         }
         * { box-sizing: border-box; }
         .app {
-          font-family: 'Inter', sans-serif;
+          font-family: 'Barlow Condensed', sans-serif;
           background: var(--ice);
           color: var(--ink);
           min-height: 100%;
