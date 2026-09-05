@@ -1530,7 +1530,7 @@ export default function TeamBalancer() {
           color: var(--whistle);
         }
         .hero h1 {
-          font-family: 'Archivo Black', sans-serif;
+          font-family: 'Barlow Condensed', sans-serif;
           font-size: 40px;
           margin: 8px 0 6px;
           line-height: 1.05;
