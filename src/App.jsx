@@ -1886,6 +1886,20 @@ export default function TeamBalancer() {
               <strong>Download both templates</strong> using the buttons below. Each one opens
               fine in Excel, Google Sheets, or Apple Numbers.
             </li>
+                      <div className="controlsRow" style={{ marginTop: 4 }}>
+            <button
+              className="btn btn-outline"
+              onClick={() => downloadTextFile("players_template.csv", BLANK_PLAYERS_TEMPLATE)}
+            >
+              Download blank players template
+            </button>
+            <button
+              className="btn btn-outline"
+              onClick={() => downloadTextFile("coaches_template.csv", BLANK_COACHES_TEMPLATE)}
+            >
+              Download blank coaches template
+            </button>
+          </div>
             <li>
               <strong>Delete the example rows</strong> (the ones starting with "EXAMPLE") once
               you understand the format — they're just there to show you what a filled-in row
@@ -1917,20 +1931,7 @@ export default function TeamBalancer() {
               your number of teams, and click <strong>Generate teams</strong>.
             </li>
           </ol>
-          <div className="controlsRow" style={{ marginTop: 4 }}>
-            <button
-              className="btn btn-outline"
-              onClick={() => downloadTextFile("players_template.csv", BLANK_PLAYERS_TEMPLATE)}
-            >
-              Download blank players template
-            </button>
-            <button
-              className="btn btn-outline"
-              onClick={() => downloadTextFile("coaches_template.csv", BLANK_COACHES_TEMPLATE)}
-            >
-              Download blank coaches template
-            </button>
-          </div>
+
           <details style={{ marginTop: 18 }}>
             <summary>Column format reference</summary>
             <div className="howBody">
